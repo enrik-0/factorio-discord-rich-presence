@@ -98,6 +98,26 @@ Copia el zip resultante de `dist/` a tu carpeta `mods` de Factorio.
 Dentro del juego, `/drp-debug` imprime los datos que está publicando el mod, para
 contrastarlos con el árbol de tecnologías.
 
+### 6. Abrirla junto con Factorio (opcional)
+
+En Steam, clic derecho en Factorio → **Propiedades → Opciones de lanzamiento**, y
+pon la ruta de la aplicación seguida de `%command%`:
+
+```
+"C:\ruta\a\factorio-discord-rp.exe" %command%
+```
+
+La aplicación arranca Factorio, publica mientras siga abierto y se cierra sola
+poco después de que lo cierres. Todo lo que sigue a la ruta del juego es del juego,
+así que tus otras opciones de lanzamiento siguen funcionando.
+
+- Si ya la tienes en la bandeja con **Arrancar con Windows**, esa copia es la que
+  publica y esta sólo lanza el juego: nunca hay dos copias a la vez.
+- Si la configuración falla, Factorio arranca igualmente, sin presencia. El motivo
+  queda en el registro (`%APPDATA%\factorio-discord-rp\factorio-discord-rp.log`).
+- El `config.toml` se busca junto al `.exe` y en `%APPDATA%\factorio-discord-rp\`.
+- Para volver al arranque normal, borra la línea de las opciones de lanzamiento.
+
 ## Ajustes del mod
 
 **Tú eliges qué se ve, desde dentro del juego.** El fichero de estado nunca sale de

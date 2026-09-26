@@ -25,7 +25,12 @@ const REFRESH: Duration = Duration::from_secs(2);
 
 const ICON_SIZE: u32 = 32;
 
-pub fn run(config: Config, log_path: Option<std::path::PathBuf>) -> Result<()> {
+/// Con `exit_with_game` la aplicación se cierra sola al cerrarse Factorio.
+pub fn run(
+    config: Config,
+    log_path: Option<std::path::PathBuf>,
+    exit_with_game: bool,
+) -> Result<()> {
     let shared = Arc::new(Shared::default());
 
     // La vigilancia no puede vivir aquí: este hilo se queda atendiendo mensajes.
@@ -35,8 +40,13 @@ pub fn run(config: Config, log_path: Option<std::path::PathBuf>) -> Result<()> {
         std::thread::Builder::new()
             .name("vigilancia".into())
             .spawn(move || {
-                if let Err(err) = crate::run::run(&config, &shared) {
+                if let Err(err) = crate::run::run(&config, &shared, exit_with_game) {
                     error!(%err, "la vigilancia se ha detenido");
+                }
+                // Como lanzador no queda nada que enseñar: el icono se va con ella,
+                // en vez de quedar colgado sin vigilancia detrás.
+                if exit_with_game {
+                    shared.request_shutdown();
                 }
             })
             .context("no se pudo lanzar el hilo de vigilancia")?
@@ -100,6 +110,11 @@ fn pump_messages(
     loop {
         if !windows::pump_once(REFRESH) {
             break;
+        }
+
+        // La vigilancia puede pedir el cierre por su cuenta (modo lanzador).
+        if shared.is_shutdown() {
+            return;
         }
 
         while let Ok(event) = menu_channel.try_recv() {

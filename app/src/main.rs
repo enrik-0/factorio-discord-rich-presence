@@ -9,6 +9,8 @@
 
 mod autostart;
 mod config;
+mod instance;
+mod lifetime;
 mod logging;
 mod merge;
 mod model;
@@ -19,12 +21,13 @@ mod sources;
 mod status;
 mod tray;
 
-use std::path::PathBuf;
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{bail, Result};
-use tracing::{info, warn};
+use anyhow::{bail, Context, Result};
+use tracing::{error, info, warn};
 
 use crate::config::Config;
 use crate::presence::discord::unix_now;
@@ -36,8 +39,14 @@ Discord Rich Presence para Factorio 2.1
 
 USO:
     factorio-discord-rp [OPCIONES]
+    factorio-discord-rp [OPCIONES] <factorio.exe> [ARGUMENTOS DEL JUEGO...]
 
 Sin opciones arranca en la bandeja del sistema.
+
+Con la ruta del juego actúa de lanzador: arranca Factorio, publica mientras siga
+abierto y se cierra con él. Todo lo que sigue a la ruta es del juego. En Steam,
+en las opciones de lanzamiento de Factorio:
+    \"C:\\ruta\\factorio-discord-rp.exe\" %command%
 
 OPCIONES:
     --tray             Fuerza el modo bandeja (es lo que usa el autoarranque)
@@ -49,6 +58,14 @@ OPCIONES:
     -h, --help         Muestra esta ayuda
 ";
 
+/// El juego que hay que lanzar, tal y como lo entrega Steam con `%command%`.
+#[derive(Debug, PartialEq, Eq)]
+struct GameCommand {
+    exe: PathBuf,
+    /// Argumentos del juego, sin interpretar: no son opciones de esta aplicación.
+    args: Vec<OsString>,
+}
+
 #[derive(Debug, Default, PartialEq, Eq)]
 enum Mode {
     #[default]
@@ -58,6 +75,8 @@ enum Mode {
     Dump,
     Selftest,
     Help,
+    /// Arranca el juego y se queda mientras siga abierto.
+    Launch(GameCommand),
 }
 
 #[derive(Debug, Default)]
@@ -67,11 +86,30 @@ struct Args {
 }
 
 fn parse_args() -> Result<Args> {
+    parse(std::env::args_os().skip(1))
+}
+
+/// Recibe `OsString` y no `String`: la ruta del juego y sus argumentos pueden
+/// no ser Unicode válido, y no hay motivo para fallar por eso.
+fn parse(raw: impl IntoIterator<Item = OsString>) -> Result<Args> {
     let mut args = Args::default();
-    let mut raw = std::env::args().skip(1);
+    let mut raw = raw.into_iter();
 
     while let Some(arg) = raw.next() {
-        args.mode = match arg.as_str() {
+        let Some(text) = arg.to_str().filter(|text| text.starts_with('-')) else {
+            // El primer argumento que no es una opción nuestra es el juego; todo
+            // lo que le sigue es suyo, incluidas las cosas que empiezan por `-`.
+            if args.mode != Mode::Tray {
+                bail!("la ruta del juego no se puede combinar con otras opciones\n\n{HELP}");
+            }
+            args.mode = Mode::Launch(GameCommand {
+                exe: PathBuf::from(arg),
+                args: raw.collect(),
+            });
+            break;
+        };
+
+        args.mode = match text {
             "--tray" => Mode::Tray,
             "--console" => Mode::Console,
             "--check" => Mode::Check,
@@ -100,8 +138,9 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    // En la bandeja no hay consola donde mirar: el registro va a fichero.
-    let log_path = if args.mode == Mode::Tray {
+    // En la bandeja no hay consola donde mirar: el registro va a fichero. El
+    // lanzador también vive en la bandeja, y además lo arranca Steam sin consola.
+    let log_path = if matches!(args.mode, Mode::Tray | Mode::Launch(_)) {
         hide_console();
         match logging::init_file() {
             Ok(path) => Some(path),
@@ -117,19 +156,84 @@ fn main() -> Result<()> {
         None
     };
 
+    // El lanzador va antes de leer la configuración: si esta falla, Factorio tiene
+    // que arrancar igualmente. Sin presencia, pero arrancar.
+    if let Mode::Launch(game) = args.mode {
+        return launch(args.config.as_deref(), log_path, game);
+    }
+
     let config = Config::load(args.config.as_deref())?;
 
     match args.mode {
-        Mode::Help => unreachable!("atendido antes de preparar el registro"),
+        Mode::Help | Mode::Launch(_) => unreachable!("atendidos antes"),
         Mode::Check => run_check(&config),
         Mode::Dump => run::dump(&config),
         Mode::Selftest => run_selftest(&config),
         Mode::Console => {
             let shared = Arc::new(Shared::default());
-            run::run(&config, &shared)
+            run::run(&config, &shared, false)
         }
-        Mode::Tray => tray::run(config, log_path),
+        Mode::Tray => run_resident(config, log_path),
     }
+}
+
+/// Bandeja residente, por ejemplo la del autoarranque. Una sola por sesión.
+fn run_resident(config: Config, log_path: Option<PathBuf>) -> Result<()> {
+    let Some(_guard) = instance::acquire() else {
+        info!("ya hay otra copia de la aplicación en marcha; no se abre otra");
+        return Ok(());
+    };
+    tray::run(config, log_path, false)
+}
+
+/// Modo lanzador: arranca Factorio y se queda mientras siga abierto.
+///
+/// Si ya hay una copia residente (autoarranque) es ella la que publica, y aquí
+/// sólo se lanza el juego: dos copias pisarían la misma tarjeta de Discord.
+fn launch(config_path: Option<&Path>, log_path: Option<PathBuf>, game: GameCommand) -> Result<()> {
+    let guard = instance::acquire();
+
+    if let Err(err) = spawn_game(&game) {
+        error!("no se pudo lanzar el juego: {err:#}");
+        return Err(err);
+    }
+
+    let Some(_guard) = guard else {
+        info!("ya hay otra copia en marcha: ella se encarga de la presencia");
+        return Ok(());
+    };
+
+    let config = match Config::load(config_path) {
+        Ok(config) => config,
+        Err(err) => {
+            error!("configuración inválida; Factorio arranca sin presencia: {err:#}");
+            return Ok(());
+        }
+    };
+
+    tray::run(config, log_path, true)
+}
+
+/// Arranca el juego sin esperarlo. Soltar el `Child` no lo detiene.
+///
+/// No se fija el directorio de trabajo: es el que Steam ha preparado para esta
+/// aplicación y el juego debe heredarlo igual que si lo hubiera lanzado Steam.
+///
+/// Entrada y salida van a `NUL`. Antes de llegar aquí se ha soltado la consola
+/// (`FreeConsole`), y sin ella no hay manejadores estándar que heredar: `spawn`
+/// falla con "controlador no válido" (error 6) y Factorio no llegaría a abrirse.
+fn spawn_game(game: &GameCommand) -> Result<()> {
+    use std::process::Stdio;
+
+    info!(juego = %game.exe.display(), argumentos = game.args.len(), "lanzando Factorio");
+    std::process::Command::new(&game.exe)
+        .args(&game.args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .with_context(|| format!("no se pudo lanzar {}", game.exe.display()))?;
+    Ok(())
 }
 
 /// Oculta la ventana de consola en modo bandeja.
@@ -227,5 +331,121 @@ fn run_selftest(config: &Config) -> Result<()> {
             warn!("esperando a que Discord esté disponible…");
         }
         std::thread::sleep(Duration::from_secs(2));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_strs(items: &[&str]) -> Result<Args> {
+        parse(items.iter().map(OsString::from))
+    }
+
+    fn game(exe: &str, args: &[&str]) -> Mode {
+        Mode::Launch(GameCommand {
+            exe: PathBuf::from(exe),
+            args: args.iter().map(OsString::from).collect(),
+        })
+    }
+
+    #[test]
+    fn sin_argumentos_arranca_la_bandeja() {
+        let args = parse_strs(&[]).unwrap();
+        assert_eq!(args.mode, Mode::Tray);
+        assert_eq!(args.config, None);
+    }
+
+    #[test]
+    fn las_opciones_de_diagnostico_siguen_funcionando() {
+        assert_eq!(parse_strs(&["--console"]).unwrap().mode, Mode::Console);
+        assert_eq!(parse_strs(&["--check"]).unwrap().mode, Mode::Check);
+        assert_eq!(parse_strs(&["--dump"]).unwrap().mode, Mode::Dump);
+        assert_eq!(parse_strs(&["--selftest"]).unwrap().mode, Mode::Selftest);
+        assert_eq!(parse_strs(&["-h"]).unwrap().mode, Mode::Help);
+    }
+
+    #[test]
+    fn la_ruta_del_juego_activa_el_modo_lanzador() {
+        let args = parse_strs(&[r"D:\SteamLibrary\Factorio\bin\x64\factorio.exe"]).unwrap();
+        assert_eq!(
+            args.mode,
+            game(r"D:\SteamLibrary\Factorio\bin\x64\factorio.exe", &[])
+        );
+    }
+
+    #[test]
+    fn los_argumentos_del_juego_pasan_intactos() {
+        // Incluye opciones que empiezan por `-` y rutas con espacios: nada de eso
+        // es de esta aplicación.
+        let args = parse_strs(&[
+            r"C:\Juegos\Factorio\factorio.exe",
+            "--mod-directory",
+            r"D:\mis mods",
+            "--load-game",
+            "partida.zip",
+            "--check",
+        ])
+        .unwrap();
+
+        assert_eq!(
+            args.mode,
+            game(
+                r"C:\Juegos\Factorio\factorio.exe",
+                &[
+                    "--mod-directory",
+                    r"D:\mis mods",
+                    "--load-game",
+                    "partida.zip",
+                    "--check"
+                ]
+            )
+        );
+    }
+
+    #[test]
+    fn las_opciones_propias_van_antes_del_juego() {
+        let args =
+            parse_strs(&["--config", r"C:\c.toml", "factorio.exe", "--config", "x"]).unwrap();
+        assert_eq!(args.config, Some(PathBuf::from(r"C:\c.toml")));
+        assert_eq!(args.mode, game("factorio.exe", &["--config", "x"]));
+    }
+
+    #[test]
+    fn tray_explicito_tambien_admite_juego() {
+        // El autoarranque pasa `--tray`; combinarlo con un juego no debe fallar.
+        let args = parse_strs(&["--tray", "factorio.exe"]).unwrap();
+        assert_eq!(args.mode, game("factorio.exe", &[]));
+    }
+
+    #[test]
+    fn el_juego_no_se_mezcla_con_los_modos_de_diagnostico() {
+        assert!(parse_strs(&["--check", "factorio.exe"]).is_err());
+        assert!(parse_strs(&["--console", "factorio.exe"]).is_err());
+    }
+
+    #[test]
+    fn una_opcion_propia_desconocida_es_un_error() {
+        assert!(parse_strs(&["--nada"]).is_err());
+    }
+
+    #[test]
+    fn config_sin_ruta_es_un_error() {
+        assert!(parse_strs(&["--config"]).is_err());
+    }
+
+    #[test]
+    fn la_ruta_del_juego_puede_no_ser_unicode() {
+        use std::os::windows::ffi::OsStringExt;
+        // Un sustituto suelto no es UTF-16 válido, pero Windows lo permite en rutas.
+        let raw: OsString = OsString::from_wide(&[0x0043, 0xD800, 0x0046]);
+        let args = parse([raw.clone()]).unwrap();
+        assert_eq!(
+            args.mode,
+            Mode::Launch(GameCommand {
+                exe: PathBuf::from(raw),
+                args: vec![]
+            })
+        );
     }
 }

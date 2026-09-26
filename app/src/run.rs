@@ -1,11 +1,12 @@
 //! Bucle principal: sondea las fuentes, fusiona, renderiza y publica.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use tracing::{debug, info};
 
 use crate::config::Config;
+use crate::lifetime::GameLifetime;
 use crate::merge::merge;
 use crate::presence::render::render;
 use crate::presence::DiscordSink;
@@ -20,7 +21,9 @@ const TICK: Duration = Duration::from_secs(2);
 /// tarde un ciclo entero en notarse.
 const SHUTDOWN_POLL: Duration = Duration::from_millis(200);
 
-pub fn run(config: &Config, shared: &Shared) -> Result<()> {
+/// Con `exit_with_game` la aplicación pide su propio cierre cuando Factorio, ya
+/// visto, deja de estar en ejecución (modo lanzador).
+pub fn run(config: &Config, shared: &Shared, exit_with_game: bool) -> Result<()> {
     let application_id = config.application_id()?;
     let data_dir = config.factorio_data_dir()?;
     let script_output = data_dir.join("script-output");
@@ -35,6 +38,7 @@ pub fn run(config: &Config, shared: &Shared) -> Result<()> {
     debug!(fichero = %modfile.path().display(), "fichero de estado del mod");
 
     let mut was_running = false;
+    let mut lifetime = exit_with_game.then(|| GameLifetime::new(Instant::now()));
 
     while !shared.is_shutdown() {
         process.poll();
@@ -55,6 +59,13 @@ pub fn run(config: &Config, shared: &Shared) -> Result<()> {
                 shared.update(|status| status.headline = None);
             }
             was_running = running;
+        }
+
+        if let Some(lifetime) = lifetime.as_mut() {
+            if lifetime.should_exit(running, Instant::now()) {
+                info!("Factorio ya no está en ejecución; cerrando la aplicación");
+                shared.request_shutdown();
+            }
         }
 
         if running {
