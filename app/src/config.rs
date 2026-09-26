@@ -9,6 +9,38 @@ use tracing::debug;
 /// Permite probar sin tocar el fichero de configuración.
 const ENV_APPLICATION_ID: &str = "FACTORIO_DRP_APP_ID";
 
+/// Application ID de Discord incluido al compilar, para que quien instale la
+/// aplicación no tenga que crear la suya. Lo inyecta el CI al construir el
+/// instalador (`FACTORIO_DRP_DEFAULT_APP_ID`); en una compilación normal no existe
+/// y el ID sale de `config.toml`. Es un dato público, pero así no vive en el
+/// código fuente.
+const INCLUDED_APPLICATION_ID: Option<&str> = option_env!("FACTORIO_DRP_DEFAULT_APP_ID");
+
+/// Elige el ID a usar y comprueba que sea válido.
+fn resolve_application_id<'a>(
+    configured: &'a str,
+    included: Option<&'static str>,
+) -> Result<&'a str> {
+    let configured = configured.trim();
+    let id = if configured.is_empty() {
+        included.map(str::trim).unwrap_or("")
+    } else {
+        configured
+    };
+
+    if id.is_empty() {
+        bail!(
+            "falta el Application ID de Discord.\n\
+             Créalo en https://discord.com/developers/applications y ponlo en \
+             config.toml (campo application_id) o en la variable {ENV_APPLICATION_ID}."
+        );
+    }
+    if !id.chars().all(|c| c.is_ascii_digit()) {
+        bail!("el Application ID debe ser sólo dígitos, recibido: {id:?}");
+    }
+    Ok(id)
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -156,19 +188,11 @@ impl Config {
     }
 
     /// Valida lo imprescindible para poder hablar con Discord.
+    ///
+    /// Manda lo que haya en `config.toml` (o en la variable de entorno); si está
+    /// vacío se usa el ID incluido al compilar el instalador.
     pub fn application_id(&self) -> Result<&str> {
-        let id = self.application_id.trim();
-        if id.is_empty() {
-            bail!(
-                "falta el Application ID de Discord.\n\
-                 Créalo en https://discord.com/developers/applications y ponlo en \
-                 config.toml (campo application_id) o en la variable {ENV_APPLICATION_ID}."
-            );
-        }
-        if !id.chars().all(|c| c.is_ascii_digit()) {
-            bail!("el Application ID debe ser sólo dígitos, recibido: {id:?}");
-        }
-        Ok(id)
+        resolve_application_id(&self.application_id, INCLUDED_APPLICATION_ID)
     }
 
     /// Carpeta de datos de Factorio: la que contiene `script-output`, `saves`
@@ -202,8 +226,29 @@ mod tests {
 
     #[test]
     fn rechaza_application_id_vacio() {
-        let config = Config::default();
-        assert!(config.application_id().is_err());
+        // Sin valor incluido en la compilación: así no depende de cómo se compile.
+        assert!(resolve_application_id("", None).is_err());
+        assert!(resolve_application_id("   ", None).is_err());
+    }
+
+    #[test]
+    fn sin_configurar_se_usa_el_id_incluido() {
+        assert_eq!(
+            resolve_application_id("", Some("1234567890123456789")).unwrap(),
+            "1234567890123456789"
+        );
+        // Un config.toml de ejemplo trae `application_id = ""`: cuenta como vacío.
+        assert_eq!(resolve_application_id("  ", Some("42")).unwrap(), "42");
+    }
+
+    #[test]
+    fn el_config_del_usuario_gana_al_id_incluido() {
+        assert_eq!(resolve_application_id("999", Some("42")).unwrap(), "999");
+    }
+
+    #[test]
+    fn un_id_incluido_no_numerico_tambien_se_rechaza() {
+        assert!(resolve_application_id("", Some("no-soy-un-id")).is_err());
     }
 
     #[test]

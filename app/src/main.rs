@@ -17,6 +17,7 @@ mod model;
 mod paths;
 mod presence;
 mod run;
+mod setup;
 mod sources;
 mod status;
 mod tray;
@@ -56,6 +57,22 @@ OPCIONES:
     --selftest         Publica una actividad de prueba fija y la mantiene
     --config <RUTA>    Fichero de configuración concreto
     -h, --help         Muestra esta ayuda
+
+CONFIGURACIÓN DE STEAM (la usa el instalador, también sirve a mano):
+    --setup            Detecta Steam y muestra la línea completa para las opciones
+                       de lanzamiento de Factorio, copiada al portapapeles
+    --apply            Pone la aplicación en esas opciones, con copia de seguridad
+    --uninstall        La quita de ellas, dejando el resto
+    --dry-run          Con lo anterior: enseña qué cambiaría, sin escribir nada
+    --close-steam      Cierra Steam si está abierto (hay que cerrarlo para cambiar
+                       su configuración)
+    --restart-steam    Lo reabre después, si lo ha cerrado la aplicación
+    --print-command    Imprime sólo la línea de lanzamiento
+    --copy-command     Copia la línea de lanzamiento al portapapeles
+    --autostart on|off Activa o desactiva el arranque con Windows
+
+Códigos de salida de --apply y --uninstall: 0 hecho, 10 Steam abierto, 11 no se
+encuentra Steam o Factorio, 12 no se pudo leer o escribir la configuración.
 ";
 
 /// El juego que hay que lanzar, tal y como lo entrega Steam con `%command%`.
@@ -77,12 +94,23 @@ enum Mode {
     Help,
     /// Arranca el juego y se queda mientras siga abierto.
     Launch(GameCommand),
+    /// Informe de Steam y línea para pegar (con `--dry-run`, qué cambiaría).
+    Setup,
+    Apply,
+    Uninstall,
+    PrintCommand,
+    CopyCommand,
+    Autostart(bool),
 }
 
 #[derive(Debug, Default)]
 struct Args {
     mode: Mode,
     config: Option<PathBuf>,
+    // Modificadores de la configuración de Steam: valen en cualquier orden.
+    close_steam: bool,
+    restart_steam: bool,
+    dry_run: bool,
 }
 
 fn parse_args() -> Result<Args> {
@@ -116,6 +144,35 @@ fn parse(raw: impl IntoIterator<Item = OsString>) -> Result<Args> {
             "--dump" => Mode::Dump,
             "--selftest" => Mode::Selftest,
             "-h" | "--help" => Mode::Help,
+            // `--setup` es el modo por omisión de la configuración de Steam y no
+            // debe pisar a `--apply` o `--uninstall`, vengan antes o después.
+            "--setup" => {
+                if args.mode == Mode::Tray {
+                    args.mode = Mode::Setup;
+                }
+                continue;
+            }
+            "--apply" => Mode::Apply,
+            "--uninstall" => Mode::Uninstall,
+            "--print-command" => Mode::PrintCommand,
+            "--copy-command" => Mode::CopyCommand,
+            "--close-steam" => {
+                args.close_steam = true;
+                continue;
+            }
+            "--restart-steam" => {
+                args.restart_steam = true;
+                continue;
+            }
+            "--dry-run" => {
+                args.dry_run = true;
+                continue;
+            }
+            "--autostart" => match raw.next().and_then(|value| value.into_string().ok()) {
+                Some(value) if value == "on" => Mode::Autostart(true),
+                Some(value) if value == "off" => Mode::Autostart(false),
+                _ => bail!("--autostart necesita `on` u `off`"),
+            },
             "--config" => {
                 let value = raw
                     .next()
@@ -136,6 +193,21 @@ fn main() -> Result<()> {
     if args.mode == Mode::Help {
         print!("{HELP}");
         return Ok(());
+    }
+
+    // La configuración de Steam imprime su resultado y termina con un código de
+    // salida que el instalador interpreta. Sin registro: cualquier línea de más
+    // en la salida estropearía `--print-command`.
+    if matches!(
+        args.mode,
+        Mode::Setup
+            | Mode::Apply
+            | Mode::Uninstall
+            | Mode::PrintCommand
+            | Mode::CopyCommand
+            | Mode::Autostart(_)
+    ) {
+        return run_setup(&args);
     }
 
     // En la bandeja no hay consola donde mirar: el registro va a fichero. El
@@ -165,7 +237,14 @@ fn main() -> Result<()> {
     let config = Config::load(args.config.as_deref())?;
 
     match args.mode {
-        Mode::Help | Mode::Launch(_) => unreachable!("atendidos antes"),
+        Mode::Help
+        | Mode::Launch(_)
+        | Mode::Setup
+        | Mode::Apply
+        | Mode::Uninstall
+        | Mode::PrintCommand
+        | Mode::CopyCommand
+        | Mode::Autostart(_) => unreachable!("atendidos antes"),
         Mode::Check => run_check(&config),
         Mode::Dump => run::dump(&config),
         Mode::Selftest => run_selftest(&config),
@@ -175,6 +254,36 @@ fn main() -> Result<()> {
         }
         Mode::Tray => run_resident(config, log_path),
     }
+}
+
+/// Modos de configuración de Steam: hacen su trabajo, imprimen y salen con el
+/// código que corresponde (0, 10, 11, 12 o 1; ver `setup::Failure`).
+fn run_setup(args: &Args) -> Result<()> {
+    use setup::Action;
+
+    let options = setup::Options {
+        close_steam: args.close_steam,
+        restart_steam: args.restart_steam,
+    };
+
+    let outcome = match &args.mode {
+        Mode::Setup if args.dry_run => setup::dry_run(Action::Install),
+        Mode::Setup => setup::report(),
+        Mode::Apply if args.dry_run => setup::dry_run(Action::Install),
+        Mode::Apply => setup::apply(&options),
+        Mode::Uninstall if args.dry_run => setup::dry_run(Action::Uninstall),
+        Mode::Uninstall => setup::uninstall(&options),
+        Mode::PrintCommand => setup::print_command(),
+        Mode::CopyCommand => setup::copy_command(),
+        Mode::Autostart(on) => setup::set_autostart(*on),
+        _ => unreachable!("sólo se llama con los modos de configuración"),
+    };
+
+    if let Err(failure) = outcome {
+        eprintln!("error: {failure}");
+        std::process::exit(failure.exit_code());
+    }
+    Ok(())
 }
 
 /// Bandeja residente, por ejemplo la del autoarranque. Una sola por sesión.
@@ -432,6 +541,57 @@ mod tests {
     #[test]
     fn config_sin_ruta_es_un_error() {
         assert!(parse_strs(&["--config"]).is_err());
+    }
+
+    #[test]
+    fn las_opciones_de_steam_valen_en_cualquier_orden() {
+        let a = parse_strs(&["--setup", "--apply", "--close-steam", "--restart-steam"]).unwrap();
+        let b = parse_strs(&["--restart-steam", "--close-steam", "--apply", "--setup"]).unwrap();
+        for args in [a, b] {
+            assert_eq!(args.mode, Mode::Apply);
+            assert!(args.close_steam && args.restart_steam);
+        }
+    }
+
+    #[test]
+    fn setup_a_secas_es_el_informe() {
+        let args = parse_strs(&["--setup"]).unwrap();
+        assert_eq!(args.mode, Mode::Setup);
+        assert!(!args.dry_run && !args.close_steam && !args.restart_steam);
+        assert!(parse_strs(&["--setup", "--dry-run"]).unwrap().dry_run);
+    }
+
+    #[test]
+    fn los_modos_de_steam_se_reconocen() {
+        assert_eq!(parse_strs(&["--uninstall"]).unwrap().mode, Mode::Uninstall);
+        assert_eq!(
+            parse_strs(&["--print-command"]).unwrap().mode,
+            Mode::PrintCommand
+        );
+        assert_eq!(
+            parse_strs(&["--copy-command"]).unwrap().mode,
+            Mode::CopyCommand
+        );
+    }
+
+    #[test]
+    fn autostart_pide_on_u_off() {
+        assert_eq!(
+            parse_strs(&["--autostart", "on"]).unwrap().mode,
+            Mode::Autostart(true)
+        );
+        assert_eq!(
+            parse_strs(&["--autostart", "off"]).unwrap().mode,
+            Mode::Autostart(false)
+        );
+        assert!(parse_strs(&["--autostart"]).is_err());
+        assert!(parse_strs(&["--autostart", "quizas"]).is_err());
+    }
+
+    #[test]
+    fn la_configuracion_de_steam_no_se_mezcla_con_un_juego() {
+        assert!(parse_strs(&["--apply", "factorio.exe"]).is_err());
+        assert!(parse_strs(&["--setup", "factorio.exe"]).is_err());
     }
 
     #[test]
