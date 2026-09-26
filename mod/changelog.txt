@@ -1,4 +1,13 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.2.2
+Date: 2026-09-26
+  Bugfixes:
+    - El cronómetro de sesión marcaba siempre 0. Al cargar una partida ya empezada
+      Factorio no avisa de que el jugador entra, así que el inicio de la sesión no
+      se guardaba. Ahora arranca la primera vez que el mod ve al jugador.
+    - El inicio de la sesión ya no se guarda en la partida: antes habría sobrevivido
+      al cierre y contado horas de sesiones anteriores.
+---------------------------------------------------------------------------------------------------
 Version: 0.2.1
 Date: 2026-08-29
   Bugfixes:

@@ -110,13 +110,19 @@ pub fn build(state: &GameState, privacy: &Privacy) -> ActivitySpec {
     }
 }
 
+/// Instante Unix en que arrancó el cronómetro.
+///
+/// El tiempo transcurrido lo midió el mod al escribir, así que se resta de *ese*
+/// instante y no del actual. Con `unix_now()` el resultado avanzaba con cada
+/// sondeo mientras el mod no reescribía, y el cronómetro de Discord se reiniciaba
+/// cada vez que la deriva superaba la tolerancia del deduplicador.
 fn timer_start(state: &GameState, mode: TimerMode) -> Option<i64> {
     let elapsed = match mode {
         TimerMode::Save => state.playtime_secs(),
         TimerMode::Session => state.session_secs(),
         TimerMode::None => return None,
     }?;
-    Some(unix_now() - elapsed)
+    Some(state.sampled_at.unwrap_or_else(unix_now) - elapsed)
 }
 
 fn party_size(state: &GameState) -> Option<(i32, i32)> {
@@ -319,6 +325,25 @@ mod tests {
             &Privacy::default(),
         );
         assert_eq!(none.start_timestamp, None);
+    }
+
+    #[test]
+    fn el_inicio_del_cronometro_no_depende_de_cuando_se_sondea() {
+        // Regresión: el inicio se calculaba como `ahora - tiempo`, así que cada
+        // sondeo daba un valor distinto y Discord reiniciaba el cronómetro.
+        let mut state = with_display(Display {
+            timer: TimerMode::Session,
+            ..Display::default()
+        });
+        state.sampled_at = Some(1_700_000_000);
+
+        let primero = build(&state, &Privacy::default()).start_timestamp;
+        std::thread::sleep(std::time::Duration::from_millis(1_100));
+        let despues = build(&state, &Privacy::default()).start_timestamp;
+
+        // 36000 ticks / 60 = 600 s de sesión.
+        assert_eq!(primero, Some(1_700_000_000 - 600));
+        assert_eq!(despues, primero, "mismos datos, mismo inicio");
     }
 
     #[test]

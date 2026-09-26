@@ -5,7 +5,7 @@
 //! va sobrado y evita hilos, colas y antirrebotes.
 
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use tracing::{debug, warn};
 
@@ -76,7 +76,7 @@ impl ModFileWatcher {
             Err(_) => return,
         };
 
-        let parsed: ModState = match serde_json::from_str(&text) {
+        let mut parsed: ModState = match serde_json::from_str(&text) {
             Ok(parsed) => parsed,
             Err(err) => {
                 // Leer a la vez que el mod escribe da JSON truncado. No es un
@@ -99,6 +99,13 @@ impl ModFileWatcher {
             return;
         }
         self.warned_schema = false;
+
+        // Los tiempos del JSON describen el momento en que el mod escribió, no el
+        // de esta lectura: la fecha del fichero es el ancla del cronómetro.
+        parsed.sampled_at = self
+            .modified
+            .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+            .map(|since_epoch| since_epoch.as_secs() as i64);
 
         self.last_seq = Some(parsed.seq);
         self.state = Some(parsed);
@@ -200,6 +207,22 @@ mod tests {
             watcher.state().is_none(),
             "un fichero de hace una hora no describe la partida actual"
         );
+    }
+
+    #[test]
+    fn la_fecha_del_fichero_es_el_ancla_del_cronometro() {
+        let dir = tempdir("ancla");
+        let mut watcher = watcher_with(&dir, &payload(1, SUPPORTED_SCHEMA));
+
+        let full = RELATIVE_PARTS
+            .iter()
+            .fold(dir.clone(), |acc, p| acc.join(p));
+        let escrito = SystemTime::now() - Duration::from_secs(7);
+        filetime::set_file_mtime(&full, escrito.into()).unwrap();
+
+        watcher.poll();
+        let esperado = escrito.duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+        assert_eq!(watcher.state().and_then(|s| s.sampled_at), Some(esperado));
     }
 
     #[test]

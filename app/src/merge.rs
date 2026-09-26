@@ -38,6 +38,7 @@ pub fn merge(running: bool, log: &LogFacts, mod_state: Option<&ModState>) -> Gam
         state.multiplayer = Some(data.game.multiplayer);
         state.evolution = data.evolution;
         state.session_ticks = data.game.session_ticks;
+        state.sampled_at = data.sampled_at;
         state.display = data.display.clone();
     }
 
@@ -90,6 +91,7 @@ mod tests {
             }),
             evolution: Some(0.42),
             display: None,
+            sampled_at: Some(1_700_000_000),
         }
     }
 
@@ -131,6 +133,12 @@ mod tests {
         let state = merge(true, &log_facts(), Some(&mod_state()));
         assert_eq!(state.multiplayer, Some(true));
         assert_eq!(state.players_online, Some(4));
+    }
+
+    #[test]
+    fn la_hora_de_escritura_del_mod_llega_al_estado() {
+        let state = merge(true, &log_facts(), Some(&mod_state()));
+        assert_eq!(state.sampled_at, Some(1_700_000_000));
     }
 
     #[test]

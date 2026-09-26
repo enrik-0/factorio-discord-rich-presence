@@ -32,6 +32,11 @@ pub struct GameState {
     pub evolution: Option<f64>,
     /// Tiempo de esta sesión, frente a `ticks_played` que es el del save.
     pub session_ticks: Option<u64>,
+    /// Instante Unix (segundos) en que el mod escribió los datos de arriba.
+    ///
+    /// Es el ancla del cronómetro: `ticks_played` y `session_ticks` describen ese
+    /// instante, no el de nuestro sondeo.
+    pub sampled_at: Option<i64>,
     /// Qué quiere ver el jugador. `None` en modo degradado, sin el mod.
     pub display: Option<Display>,
 
@@ -213,6 +218,9 @@ pub struct ModState {
     pub evolution: Option<f64>,
     #[serde(default)]
     pub display: Option<Display>,
+    /// No viene en el JSON: lo rellena el lector con la fecha del fichero.
+    #[serde(skip)]
+    pub sampled_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

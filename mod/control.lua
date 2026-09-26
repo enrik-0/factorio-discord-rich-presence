@@ -28,13 +28,21 @@ end
 -- Estado persistente
 --------------------------------------------------------------------------------
 
+-- Inicio de la sesión de cada jugador, en `game.ticks_played`.
+--
+-- No va en `storage`: la sesión es "desde que se cargó la partida", y lo que se
+-- guarda sobrevive al cierre y acabaría contando horas de sesiones anteriores.
+-- Al ser local, se vacía en cada carga. Sólo sirve para escribir el fichero de
+-- estado, así que no influye en la simulación.
+local session_start = {}
+
 local function init_storage()
   storage.seq = storage.seq or 0
   storage.tech = storage.tech or {}
   storage.translations = storage.translations or {}
   storage.requested = storage.requested or {}
   storage.pending = storage.pending or {}
-  storage.session_start = storage.session_start or {}
+  storage.session_start = nil -- heredado de la 0.2.1; ya no se guarda
 end
 
 --------------------------------------------------------------------------------
@@ -162,6 +170,12 @@ local function write_state()
         ensure_translation(player, current)
       end
 
+      -- Al cargar una partida ya empezada no llega `on_player_joined_game`, así
+      -- que la sesión arranca la primera vez que el mod ve al jugador.
+      if not session_start[player.index] then
+        session_start[player.index] = game.ticks_played
+      end
+
       local payload = collect.build_payload(player, {
         schema = SCHEMA,
         seq = storage.seq,
@@ -171,7 +185,7 @@ local function write_state()
         tech_counts = storage.tech[force.index],
         translations = storage.translations[player.index],
         display = build_display(settings),
-        session_start = storage.session_start[player.index],
+        session_start = session_start[player.index],
       })
 
       -- `for_player` hace que cada cliente escriba sólo su propio fichero:
@@ -241,18 +255,18 @@ end)
 script.on_event(defines.events.on_player_removed, function(event)
   storage.translations[event.player_index] = nil
   storage.requested[event.player_index] = nil
-  storage.session_start[event.player_index] = nil
+  session_start[event.player_index] = nil
 end)
 
 -- `player.online_time` NO sirve para el tiempo de sesión: acumula todas las
 -- sesiones de ese jugador en la partida. La sesión real es cuánto ha avanzado
 -- el reloj de la partida desde que entró.
 script.on_event(defines.events.on_player_joined_game, function(event)
-  storage.session_start[event.player_index] = game.ticks_played
+  session_start[event.player_index] = game.ticks_played
 end)
 
 script.on_event(defines.events.on_player_left_game, function(event)
-  storage.session_start[event.player_index] = nil
+  session_start[event.player_index] = nil
 end)
 
 --------------------------------------------------------------------------------
