@@ -1,0 +1,47 @@
+name: Release mod
+
+# Solo se publica al empujar un tag vX.Y.Z. Los pushes a ramas no lo disparan.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+concurrency:
+  group: release-mod-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Publicar en el Mod Portal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Falla con un error claro si el tag y mod/info.json no coinciden.
+      - name: Comprobar que el tag coincide con info.json
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          INFO_VERSION="$(jq -r '.version' mod/info.json)"
+          if [[ "$TAG_VERSION" != "$INFO_VERSION" ]]; then
+            echo "::error::El tag ${GITHUB_REF_NAME} no coincide con la versión de mod/info.json (${INFO_VERSION})"
+            exit 1
+          fi
+
+      # Valida info.json y el changelog, y genera dist/<nombre>_<version>.zip.
+      - name: Empaquetar
+        run: python3 scripts/package_mod.py
+
+      - name: Publicar en el Mod Portal
+        env:
+          FACTORIO_MOD_API_KEY: ${{ secrets.FACTORIO_MOD_API_KEY }}
+        run: bash scripts/publish_mod.sh
+
+      - name: Crear release en GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.zip \
+            --title "Mod $GITHUB_REF_NAME" \
+            --generate-notes
