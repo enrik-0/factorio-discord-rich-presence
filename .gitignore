@@ -1,0 +1,17 @@
+# Rust
+/target/
+/app/target/
+**/*.rs.bk
+
+# Configuración local del usuario (contiene el Application ID y rutas propias)
+config.toml
+!app/config.example.toml
+
+# Empaquetado del mod
+/dist/
+*.zip
+
+# Sistema
+Thumbs.db
+desktop.ini
+.DS_Store

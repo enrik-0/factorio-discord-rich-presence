@@ -1,0 +1,27 @@
+[package]
+name = "factorio-discord-rp"
+description = "Discord Rich Presence para Factorio 2.1"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "factorio-discord-rp"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.104"
+auto-launch = "0.6.0"
+discord-rich-presence = "1.1.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+sysinfo = "0.39.6"
+toml = "1.1.4"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+tray-icon = "0.24.2"
+windows-sys = { version = "0.61.2", features = ["Win32_System_Console", "Win32_UI_WindowsAndMessaging", "Win32_Foundation"] }
+
+[dev-dependencies]
+filetime = "0.2.29"

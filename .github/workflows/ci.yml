@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  app:
+    name: App (Rust)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Formato
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --all
+
+  mod:
+    name: Mod (Lua)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Lua y luacheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.4 luarocks
+          sudo luarocks install luacheck
+
+      - name: Sintaxis Lua
+        run: |
+          for file in mod/*.lua; do
+            luac5.4 -p "$file"
+          done
+
+      - name: Luacheck
+        run: luacheck mod --config .luacheckrc
+
+      # Valida info.json, comprueba que el changelog cubre la versión y produce
+      # el zip con la estructura exacta que exige el Mod Portal.
+      - name: Empaquetar
+        run: python3 scripts/package_mod.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mod-zip
+          path: dist/*.zip

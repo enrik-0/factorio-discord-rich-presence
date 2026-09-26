@@ -1,0 +1,51 @@
+# Copia este fichero a `config.toml` junto al ejecutable y rellena application_id.
+#
+# Para obtener el Application ID:
+#   1. Entra en https://discord.com/developers/applications
+#   2. "New Application" y llámala  Factorio
+#   3. Copia el "Application ID" de la pestaña General Information
+#   4. En Rich Presence > Art Assets sube UNA imagen, el logo de Factorio,
+#      con la clave  factorio
+#      (ojo: NO es el "Icono de la aplicación" de Información general)
+
+application_id = ""
+
+# Ruta a la carpeta de datos de Factorio (la que contiene script-output,
+# saves y factorio-current.log). Vacío = detección automática.
+factorio_data_dir = ""
+
+# Clave del asset de Rich Presence. Vacío = sin imagen.
+large_image = "factorio"
+
+[privacy]
+# Veto de la aplicación, por encima de los ajustes del mod. La dirección del
+# servidor necesita estar activada en los dos sitios para llegar a mostrarse.
+share_server_address = false
+share_save_name = true
+
+
+# ---------------------------------------------------------------------------
+# MODO AVANZADO
+#
+# Normalmente NO necesitas esto: qué campos se ven se elige en los ajustes del
+# mod, dentro del juego, y la aplicación los reparte en huecos fijos.
+#
+# Si descomentas [templates], mandan las plantillas y se ignoran las casillas
+# del mod. No pueden ser autoridad las dos a la vez: si las casillas eligieran
+# los campos y la plantilla el sitio, activar una casilla que la plantilla no
+# menciona no haría nada.
+#
+# Variables: {save} {planet} {surface} {research} {research_pct} {tech_done}
+#            {tech_total} {evolution} {rockets} {mod_count} {players_online}
+#            {mode} {overhaul} {version} {player} {server}
+#
+# Los bloques separados por " · " se eliminan enteros si les falta algún dato.
+# ---------------------------------------------------------------------------
+
+# [templates]
+# details    = "{planet} · {save}"
+# state      = "Investigando {research} ({research_pct}%)"
+# large_text = "{planet} · {tech_done}/{tech_total} tecnologías · {mode}"
+#
+# [templates.fallback]
+# state = "{tech_done}/{tech_total} tecnologías"

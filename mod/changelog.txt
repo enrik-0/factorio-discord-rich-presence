@@ -1,0 +1,29 @@
+---------------------------------------------------------------------------------------------------
+Version: 0.2.1
+Date: 2026-08-29
+  Bugfixes:
+    - Los textos en español no se cargaban: Factorio usa el código es-ES, no es.
+    - El tiempo de sesión mostraba casi toda la partida. player.online_time acumula
+      todas las sesiones del jugador, así que ahora se mide desde que entra.
+---------------------------------------------------------------------------------------------------
+Version: 0.2.0
+Date: 2026-08-29
+  Features:
+    - Ahora eliges desde los ajustes qué campos aparecen en la tarjeta de Discord.
+      Cada uno indica en qué hueco sale, así que ninguna casilla puede activarse
+      sin que se vea nada.
+    - Nuevos campos: factor de evolución, modpack detectado, número de mods,
+      cohetes lanzados y nombre de jugador.
+    - El cronómetro puede contar el tiempo de la partida, el de la sesión, o nada.
+  Changes:
+    - Se envía siempre toda la información disponible: el fichero no sale del
+      equipo, así que lo que se elige es qué se muestra.
+    - Los contadores a cero se ocultan solos.
+---------------------------------------------------------------------------------------------------
+Version: 0.1.0
+Date: 2026-08-29
+  Features:
+    - Primera versión: publica planeta, investigación en curso, tecnologías completadas
+      y tiempo jugado en script-output/discord-rp/state.json.
+    - Ajustes por jugador para elegir qué se comparte en multijugador.
+    - Comando /drp-debug para contrastar el conteo de tecnologías.
