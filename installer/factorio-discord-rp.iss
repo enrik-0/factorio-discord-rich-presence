@@ -42,7 +42,7 @@ UninstallDisplayName={#AppName}
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [Messages]
-FinishedLabel=[name] se ha instalado correctamente.%n%nSólo falta un paso: instalar el mod «Discord Rich Presence» desde el Mod Portal de Factorio (o desde el propio juego, en Mods).
+FinishedLabel=¡Listo! [name] ya está instalado.%n%nSólo te falta el mod: instálalo desde el Mod Portal de Factorio, o desde el propio juego, en Mods.
 
 [Files]
 Source: "..\target\release\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
@@ -51,7 +51,7 @@ Source: "..\target\release\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"; Parameters: "--tray"
 
 [Run]
-Filename: "{#ModUrl}"; Description: "Abrir la página del mod en el Mod Portal (hace falta instalarlo)"; Flags: shellexec postinstall skipifsilent
+Filename: "{#ModUrl}"; Description: "Abrir la página del mod para instalarlo"; Flags: shellexec postinstall skipifsilent
 
 [Code]
 const
@@ -112,8 +112,8 @@ begin
 
   // Se coloca tras la instalación de los archivos y sólo aparece si hace falta.
   CommandPage := CreateCustomPage(wpInstalling,
-    'Un último paso: pegar el comando en Steam',
-    'Copia esta línea en las opciones de lanzamiento de Factorio.');
+    'Un último paso',
+    'Pega esta línea en las opciones de lanzamiento de Factorio.');
 
   CommandIntro := TNewStaticText.Create(CommandPage);
   CommandIntro.Parent := CommandPage.Surface;
@@ -170,10 +170,10 @@ begin
 
   if ManualReason <> '' then
     CommandIntro.Caption := ManualReason + #13#10#13#10 +
-      'Pega esta línea en Steam: clic derecho en Factorio > Propiedades > Opciones de lanzamiento.'
+      'Pégala tú: clic derecho en Factorio > Propiedades > Opciones de lanzamiento.'
   else
     CommandIntro.Caption :=
-      'Pega esta línea en Steam: clic derecho en Factorio > Propiedades > Opciones de lanzamiento.';
+      'Copia esta línea y pégala en Steam: clic derecho en Factorio > Propiedades > Opciones de lanzamiento.';
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
@@ -200,14 +200,14 @@ begin
   begin
     // Steam abierto: sólo se cierra con permiso, y se reabre después.
     if SuppressibleMsgBox(
-         'Steam está abierto, y para cambiar sus opciones hay que cerrarlo un momento.' + #13#10#13#10 +
-         '¿Quieres que lo cierre y lo vuelva a abrir por ti?',
+         'Para configurar Steam automáticamente necesito cerrarlo un momento.' + #13#10#13#10 +
+         '¿Lo cierro y te lo vuelvo a abrir en cuanto termine?',
          mbConfirmation, MB_YESNO, IDNO) = IDYES then
       Code := RunApp('--apply --close-steam --restart-steam')
     else
     begin
       NeedManual := True;
-      ManualReason := 'No se ha tocado Steam porque está abierto.';
+      ManualReason := 'Steam estaba abierto, así que no he tocado nada.';
       Exit;
     end;
   end;
@@ -216,9 +216,9 @@ begin
   begin
     NeedManual := True;
     case Code of
-      11: ManualReason := 'No se encontró Steam o Factorio en este equipo.';
+      11: ManualReason := 'No he encontrado Steam ni Factorio en este equipo.';
     else
-      ManualReason := 'No se pudo configurar Steam automáticamente (código ' + IntToStr(Code) + ').';
+      ManualReason := 'No he podido configurar Steam por ti (código ' + IntToStr(Code) + ').';
     end;
   end;
 end;
@@ -261,15 +261,15 @@ begin
     if UninstallSilent then
       Exit;
     if MsgBox(
-         'Steam está abierto. Para quitar la aplicación de las opciones de lanzamiento de Factorio ' +
-         'hay que cerrarlo un momento.' + #13#10#13#10 +
-         '¿Quieres que lo cierre y lo vuelva a abrir por ti?',
+         'Para quitarla de las opciones de lanzamiento necesito cerrar Steam un momento.' + #13#10#13#10 +
+         '¿Lo cierro y te lo vuelvo a abrir en cuanto termine?',
          mbConfirmation, MB_YESNO) = IDYES then
       Exec(Exe, '--uninstall --close-steam --restart-steam', '', SW_HIDE, ewWaitUntilTerminated, Code)
     else
       MsgBox(
-        'Ha quedado la aplicación en las opciones de lanzamiento de Factorio en Steam. ' +
-        'Bórrala a mano (Factorio > Propiedades > Opciones de lanzamiento) o Steam no arrancará el juego.',
+        'La aplicación sigue en las opciones de lanzamiento de Factorio, en Steam.' + #13#10#13#10 +
+        'Bórrala tú cuando puedas: clic derecho en Factorio > Propiedades > Opciones de lanzamiento. ' +
+        'Si no, Steam no arrancará el juego.',
         mbInformation, MB_OK);
   end;
 end;
