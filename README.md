@@ -30,10 +30,9 @@ rompería el determinismo en multijugador. Así que:
    [Releases](https://github.com/enrik-0/factorio-discord-rich-presence/releases) y
    ejecútalo. Es un instalador sin firmar, así que Windows puede avisar con
    *"Windows protegió su PC"*: pulsa **Más información → Ejecutar de todas formas**.
-2. Elige cómo quieres que se abra:
-   - **Con Factorio, desde Steam** (recomendado): se abre al lanzar el juego y se
-     cierra con él. El instalador configura las opciones de lanzamiento por ti.
-   - **Al iniciar Windows**: queda en la bandeja del sistema.
+2. Elige cómo configurar Steam:
+   - **Automático** (recomendado): el instalador pone las opciones de lanzamiento
+     de Factorio por ti. Se abre al lanzar el juego y se cierra con él.
    - **Manual**: el instalador te enseña la línea completa para pegarla tú mismo en
      Steam → Factorio → Propiedades → Opciones de lanzamiento.
 3. Instala el mod «Discord Rich Presence» desde el

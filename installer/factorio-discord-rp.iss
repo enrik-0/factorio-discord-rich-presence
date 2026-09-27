@@ -52,13 +52,11 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"; Parameters: "--t
 
 [Run]
 Filename: "{#ModUrl}"; Description: "Abrir la página del mod en el Mod Portal (hace falta instalarlo)"; Flags: shellexec postinstall skipifsilent
-Filename: "{app}\{#AppExe}"; Parameters: "--tray"; Description: "Iniciar la aplicación ahora"; Flags: nowait postinstall skipifsilent; Check: StartupMode
 
 [Code]
 const
-  ModeSteam = 0;
-  ModeStartup = 1;
-  ModeManual = 2;
+  ModeAuto = 0;
+  ModeManual = 1;
 
 var
   HowPage: TInputOptionWizardPage;
@@ -74,11 +72,6 @@ var
 function AppPath: String;
 begin
   Result := ExpandConstant('{app}\{#AppExe}');
-end;
-
-function StartupMode: Boolean;
-begin
-  Result := HowPage.SelectedValueIndex = ModeStartup;
 end;
 
 // Lanza la aplicación con parámetros y espera. Devuelve su código de salida, o -1
@@ -109,14 +102,13 @@ end;
 procedure InitializeWizard;
 begin
   HowPage := CreateInputOptionPage(wpSelectDir,
-    'Cómo abrir la aplicación',
-    '¿Cuándo quieres que se ejecute?',
+    'Cómo configurar Steam',
+    '¿Automático o manual?',
     'Elige una opción. Podrás cambiarla volviendo a ejecutar este instalador.',
     True, False);
-  HowPage.Add('Con Factorio, desde Steam (recomendado): se abre al lanzar el juego y se cierra con él');
-  HowPage.Add('Al iniciar Windows: queda en la bandeja del sistema');
-  HowPage.Add('Lo haré yo: muéstrame el comando para pegar en Steam');
-  HowPage.SelectedValueIndex := ModeSteam;
+  HowPage.Add('Automático (recomendado)');
+  HowPage.Add('Manual');
+  HowPage.SelectedValueIndex := ModeAuto;
 
   // Se coloca tras la instalación de los archivos y sólo aparece si hace falta.
   CommandPage := CreateCustomPage(wpInstalling,
@@ -236,17 +228,15 @@ begin
   if CurStep <> ssPostInstall then
     Exit;
 
+  // El autoarranque no se ofrece como opción propia; queda siempre desactivado
+  // (una reinstalación sobre una versión que sí lo tuviera lo apaga también).
+  RunApp('--autostart off');
+
   case HowPage.SelectedValueIndex of
-    ModeSteam:
-      begin
-        RunApp('--autostart off');
-        ConfigureSteam;
-      end;
-    ModeStartup:
-      RunApp('--autostart on');
+    ModeAuto:
+      ConfigureSteam;
     ModeManual:
       begin
-        RunApp('--autostart off');
         NeedManual := True;
         ManualReason := '';
       end;
