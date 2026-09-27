@@ -8,4 +8,4 @@ Space Exploration) automatically.
 Needs the free, open-source companion app for Windows to talk to Discord:
 **[github.com/enrik-0/factorio-discord-rich-presence](https://github.com/enrik-0/factorio-discord-rich-presence)**
 
-Requires Factorio **2.1**. Like any mod, disables Steam achievements while active.
+Requires Factorio **2.1**.

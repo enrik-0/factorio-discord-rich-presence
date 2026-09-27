@@ -3,11 +3,6 @@
 Muestra en tu perfil de Discord a qué estás jugando en Factorio: el save, el planeta,
 la investigación en curso, cuántas tecnologías llevas y el tiempo jugado de la partida.
 
-> **Aviso: el mod desactiva los logros de Steam.** No es cosa de este mod — Factorio
-> desactiva los logros con *cualquier* mod activo. Si te importan, puedes usar sólo la
-> aplicación sin instalar el mod: seguirás viendo el save y el tiempo de sesión, pero no
-> el planeta ni la investigación.
-
 ## Por qué son dos piezas
 
 El sandbox de Lua de Factorio no tiene sockets, ni HTTP, ni acceso al sistema de ficheros
