@@ -9,9 +9,6 @@ concurrency:
   group: release-mod-${{ github.ref_name }}
   cancel-in-progress: false
 
-permissions:
-  contents: write
-
 jobs:
   publish:
     name: Publicar en el Mod Portal
@@ -37,11 +34,3 @@ jobs:
         env:
           FACTORIO_MOD_API_KEY: ${{ secrets.FACTORIO_MOD_API_KEY }}
         run: bash scripts/publish_mod.sh
-
-      - name: Crear release en GitHub
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" dist/*.zip \
-            --title "Mod $GITHUB_REF_NAME" \
-            --generate-notes
