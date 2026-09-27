@@ -21,6 +21,10 @@ toml = "1.1.4"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 tray-icon = "0.24.2"
+
+# El registro, el portapapeles y la ventana de consola son de Windows; en otras
+# plataformas no hace falta ni intentar resolver este crate.
+[target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = [
     "Win32_Foundation",
     "Win32_Security",
@@ -31,6 +35,10 @@ windows-sys = { version = "0.61.2", features = [
     "Win32_System_Threading",
     "Win32_UI_WindowsAndMessaging",
 ] }
+
+# El bloqueo de instancia única en Unix se hace con flock sobre un fichero.
+[target.'cfg(unix)'.dependencies]
+fd-lock = "*"
 
 [dev-dependencies]
 filetime = "0.2.29"
