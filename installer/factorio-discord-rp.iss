@@ -39,10 +39,13 @@ UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
 
 ; El primero de la lista es el que se usa por defecto en una instalación
-; silenciosa sin /LANG, y el preseleccionado en el selector de idioma.
+; silenciosa sin /LANG, y el preseleccionado en el selector de idioma cuando
+; el Windows del usuario no coincide con ninguno de los dos declarados.
+; Inglés primero: la mayoría de quien lo descargue no tendrá Windows en
+; español ni en inglés necesariamente, pero el proyecto se anuncia en inglés.
 [Languages]
-Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [Messages]
 english.FinishedLabel=All done! [name] is installed.%n%nOne thing left: install the mod from the Factorio Mod Portal, or from the game itself, under Mods.

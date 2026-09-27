@@ -140,7 +140,7 @@ Copia el zip resultante de `dist/` a tu carpeta `mods` de Factorio.
 
 ```bash
 cargo build --release
-ISCC.exe /DAppVersion=0.5.1 installer\factorio-discord-rp.iss
+ISCC.exe /DAppVersion=0.5.2 installer\factorio-discord-rp.iss
 ```
 
 `FACTORIO_DRP_DEFAULT_APP_ID`, puesto antes de `cargo build`, incluye un Application
