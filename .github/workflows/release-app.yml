@@ -1,0 +1,84 @@
+name: Release app
+
+# Tag propio (app-vX.Y.Z), distinto del v* del mod: cada pieza se publica por
+# separado y un tag no dispara el workflow de la otra.
+on:
+  push:
+    tags: ["app-v[0-9]+.[0-9]+.[0-9]+"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versión a compilar (X.Y.Z); en vacío usa la del workspace"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Compilar el instalador
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolver versión
+        id: version
+        shell: bash
+        run: |
+          WORKSPACE_VERSION="$(grep -m1 '^version' Cargo.toml | sed -E 's/version = "(.*)"/\1/')"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ inputs.version }}"
+            [[ -z "$VERSION" ]] && VERSION="$WORKSPACE_VERSION"
+          else
+            VERSION="${GITHUB_REF_NAME#app-v}"
+            if [[ "$VERSION" != "$WORKSPACE_VERSION" ]]; then
+              echo "::error::El tag ${GITHUB_REF_NAME} no coincide con la versión del workspace ($WORKSPACE_VERSION)"
+              exit 1
+            fi
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      # Sin este ID, config.toml sigue siendo obligatorio para cualquiera que
+      # instale la aplicación. Es un dato público (no un secreto), guardado como
+      # variable del repositorio para no dejarlo en el código fuente.
+      - name: Compilar la aplicación
+        env:
+          FACTORIO_DRP_DEFAULT_APP_ID: ${{ vars.DISCORD_APPLICATION_ID }}
+        run: cargo build --release
+
+      - name: Instalar Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Compilar el instalador
+        shell: cmd
+        run: |
+          "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=${{ steps.version.outputs.version }} installer\factorio-discord-rp.iss
+
+      - name: Calcular el SHA-256
+        id: hash
+        shell: bash
+        run: |
+          FILE="dist/FactorioDiscordRP-Setup-${{ steps.version.outputs.version }}.exe"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          sha256sum "$FILE" | awk '{print $1}' > "$FILE.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer
+          path: dist/*
+
+      - name: Crear release en GitHub
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "${{ steps.hash.outputs.file }}" \
+            "${{ steps.hash.outputs.file }}.sha256" \
+            --title "Aplicación app-v${{ steps.version.outputs.version }}" \
+            --generate-notes

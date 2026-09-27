@@ -6,4 +6,4 @@ members = ["app"]
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/villarcea/factorio-discord-rich-presence"
+repository = "https://github.com/enrik-0/factorio-discord-rich-presence"
