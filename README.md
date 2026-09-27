@@ -1,151 +1,149 @@
+**English** | [Español](README.es.md)
+
 # Factorio Discord Rich Presence
 
-Muestra en tu perfil de Discord a qué estás jugando en Factorio: el save, el planeta,
-la investigación en curso, cuántas tecnologías llevas y el tiempo jugado de la partida.
+Shows what you're playing in Factorio on your Discord profile: the save, the planet,
+the research in progress, how many technologies you have, and how long you've played.
 
-## Por qué son dos piezas
+## Why two pieces
 
-El sandbox de Lua de Factorio no tiene sockets, ni HTTP, ni acceso al sistema de ficheros
-fuera de `script-output`, y los desarrolladores han dicho que nunca lo tendrá porque
-rompería el determinismo en multijugador. Así que:
+Factorio's Lua sandbox has no sockets, no HTTP, and no filesystem access outside
+`script-output`, and the developers have said it never will, because it would break
+determinism in multiplayer. So:
 
-- **El mod** recolecta el estado y lo escribe en `script-output/discord-rp/state.json`.
-- **La aplicación** lee ese fichero y habla con el IPC de Discord.
+- **The mod** collects the state and writes it to `script-output/discord-rp/state.json`.
+- **The app** reads that file and talks to Discord's IPC.
 
-## Requisitos
+## Requirements
 
-- Windows, y Factorio **2.1** (el mod declara `factorio_version: "2.1"`; Factorio no
-  tiene compatibilidad hacia delante, así que no carga en 2.0)
-- Si juegas a Factorio desde Steam, no hace falta nada más: el instalador lo detecta
-  solo.
+- Windows, and Factorio **2.1** (the mod declares `factorio_version: "2.1"`; Factorio has
+  no forward compatibility, so it won't load on 2.0)
+- If you play Factorio through Steam, nothing else is needed: the installer detects it
+  on its own.
 
-## Instalación
+## Installation
 
-1. Descarga el instalador (`FactorioDiscordRP-Setup-*.exe`) desde
-   [Releases](https://github.com/enrik-0/factorio-discord-rich-presence/releases) y
-   ejecútalo. Es un instalador sin firmar, así que Windows puede avisar con
-   *"Windows protegió su PC"*: pulsa **Más información → Ejecutar de todas formas**.
-2. Elige cómo configurar Steam:
-   - **Automático** (recomendado): el instalador pone las opciones de lanzamiento
-     de Factorio por ti. Se abre al lanzar el juego y se cierra con él.
-   - **Manual**: el instalador te enseña la línea completa para pegarla tú mismo en
-     Steam → Factorio → Propiedades → Opciones de lanzamiento.
-3. Instala el mod «Discord Rich Presence» desde el
-   [Mod Portal](https://mods.factorio.com/mod/discord-rich-presence) o desde el
-   propio juego, en *Mods*. Sin él, la aplicación sigue funcionando en modo
-   degradado: publica el save y el tiempo jugado, pero no el planeta ni la
-   investigación.
-4. Juega. Comprueba la tarjeta **desde otra cuenta de Discord**: tu propio perfil no
-   la muestra completa.
+1. Download the installer (`FactorioDiscordRP-Setup-*.exe`) from
+   [Releases](https://github.com/enrik-0/factorio-discord-rich-presence/releases) and
+   run it. It's an unsigned installer, so Windows may warn with
+   *"Windows protected your PC"*: click **More info → Run anyway**.
+2. Choose how to set up Steam:
+   - **Automatic** (recommended): the installer sets Factorio's launch options for you.
+     It opens when you launch the game and closes with it.
+   - **Manual**: the installer shows you the full line to paste yourself into
+     Steam → Factorio → Properties → Launch Options.
+3. Install the «Discord Rich Presence» mod from the
+   [Mod Portal](https://mods.factorio.com/mod/discord-rich-presence) or from the game
+   itself, under *Mods*. Without it, the app still works in degraded mode: it publishes
+   the save name and playtime, but not the planet or research.
+4. Play. Check the card **from another Discord account**: your own profile doesn't show
+   it in full.
 
-Para desinstalarla, usa *Agregar o quitar programas*: también retira lo que haya
-puesto en las opciones de lanzamiento de Steam, sin tocar el resto de tus opciones.
+To uninstall, use *Add or remove programs*: it also removes whatever it put in Steam's
+launch options, without touching the rest of your options.
 
-Dentro del juego, `/drp-debug` imprime los datos que está publicando el mod, para
-contrastarlos con el árbol de tecnologías.
+In-game, `/drp-debug` prints the data the mod is publishing, to check it against the
+technology tree.
 
-## Ajustes del mod
+## Mod settings
 
-**Tú eliges qué se ve, desde dentro del juego.** El fichero de estado nunca sale de
-tu equipo, así que elegir qué se muestra es también el control de privacidad: lo
-único que ven los demás es la tarjeta de Discord.
+**You choose what's shown, from inside the game.** The state file never leaves your
+computer, so choosing what to show is also the privacy control: the only thing anyone
+else sees is the Discord card.
 
-Cada campo tiene un hueco fijo, indicado en la descripción de su ajuste. Así ninguna
-casilla puede activarse sin que aparezca nada.
+Every field has a fixed slot, stated in its setting's description, so no checkbox can be
+turned on without anything showing up.
 
-| Ajuste | Hueco | Por defecto |
+| Setting | Slot | Default |
 |---|---|---|
-| Nombre de la partida | línea 1 | sí |
-| Planeta | línea 1 | sí |
-| Modpack principal | línea 1 | no |
-| Investigación en curso | línea 2 | sí |
-| Contador de tecnologías | al pasar el ratón | sí |
-| Factor de evolución | al pasar el ratón | no |
-| Cohetes lanzados | al pasar el ratón | sí, oculto mientras sean 0 |
-| Número de mods | al pasar el ratón | no |
-| Un jugador / multijugador | al pasar el ratón | sí |
-| Mi nombre de jugador | al pasar el ratón | no |
-| Dirección del servidor | al pasar el ratón | **no** |
-| Cronómetro | — | tiempo de la partida |
+| Save name | line 1 | yes |
+| Planet | line 1 | yes |
+| Main modpack | line 1 | no |
+| Current research | line 2 | yes |
+| Technology counter | on hover | yes |
+| Evolution factor | on hover | no |
+| Rockets launched | on hover | yes, hidden while zero |
+| Mod count | on hover | no |
+| Singleplayer / multiplayer | on hover | yes |
+| My player name | on hover | no |
+| Server address | on hover | **no** |
+| Timer | — | save playtime |
 
-Los ajustes son **por jugador**, así que en multijugador cada uno decide lo suyo.
-El intervalo de escritura es global, porque el temporizador es único para toda la
-partida.
+Settings are **per player**, so in multiplayer everyone decides their own. The write
+interval is global, because the timer is unique to the whole save.
 
-Si un hueco se pasa de los 128 caracteres de Discord, se caen los campos de menor
-prioridad en vez de cortar a mitad de palabra.
+If a slot goes over Discord's 128 characters, lower-priority fields get dropped instead
+of cutting off mid-word.
 
-### Modo avanzado: plantillas
+### Advanced mode: templates
 
-Si prefieres decidir tú el reparto, define una sección `[templates]` en
-`config.toml`. Entonces mandan las plantillas y se ignoran las casillas del mod
-— no pueden ser autoridad las dos a la vez. Ver `app/config.example.toml`.
+If you'd rather decide the layout yourself, define a `[templates]` section in
+`config.toml`. Then the templates take over and the mod's checkboxes are ignored — the
+two can't both be in charge. See `app/config.example.toml`.
 
-## Privacidad
+## Privacy
 
-La dirección del servidor lleva **doble llave**: hay que activarla en los ajustes
-del mod *y* en `config.toml`. Es el único campo que expone algo de fuera de la
-partida, así que la aplicación mantiene un veto por encima del mod.
+The server address has a **double lock**: it needs to be turned on both in the mod's
+settings *and* in `config.toml`. It's the only field that exposes anything from outside
+the game, so the app keeps a veto over the mod.
 
-El resto se controla desde los ajustes del mod, dentro del juego.
+Everything else is controlled from the mod's settings, in-game.
 
-## Desarrollo
+## Development
 
-Para compilar y ejecutar desde el código en vez de usar el instalador:
+To build and run from source instead of using the installer:
 
-- Rust estable, para compilar la aplicación.
-- Python 3, sólo para el script de empaquetado del mod.
-- Inno Setup 6, sólo para compilar el instalador (`installer/factorio-discord-rp.iss`).
+- Rust stable, to build the app.
+- Python 3, only for the mod packaging script.
+- Inno Setup 6, only to build the installer (`installer/factorio-discord-rp.iss`).
 
-### Crear la aplicación de Discord
+### Create the Discord application
 
-Sólo hace falta una vez, si no vas a usar el instalador (que ya trae una incluida):
+Only needed once, if you're not using the installer (which already includes one):
 
-1. Entra en <https://discord.com/developers/applications> y pulsa **New Application**.
-2. Llámala exactamente `Factorio` — ese nombre es lo que Discord muestra como
-   *"Jugando a ..."*.
-3. Copia el **Application ID** de *General Information*.
-4. En *Rich Presence → Art Assets* sube **una sola imagen**, el logo de Factorio,
-   con la clave `factorio`. No hace falta un icono por planeta: el planeta se lee
-   en el texto de la tarjeta.
+1. Go to <https://discord.com/developers/applications> and click **New Application**.
+2. Name it exactly `Factorio` — that name is what Discord shows as *"Playing ..."*.
+3. Copy the **Application ID** from *General Information*.
+4. Under *Rich Presence → Art Assets*, upload **a single image**, the Factorio logo,
+   with the key `factorio`. No per-planet icon is needed: the planet is read from the
+   card's text.
 
-### Configurar y ejecutar
+### Configure and run
 
 ```bash
 cp app/config.example.toml config.toml
 ```
 
-Pon el Application ID en `config.toml`. Para una prueba rápida sirve la variable
-de entorno `FACTORIO_DRP_APP_ID`.
+Put the Application ID in `config.toml`. For a quick test, the `FACTORIO_DRP_APP_ID`
+environment variable also works.
 
 ```bash
-cargo run -- --check      # Application ID y rutas, sin conectar con Discord
-cargo run -- --selftest   # publica una actividad fija y la mantiene
+cargo run -- --check      # Application ID and paths, without connecting to Discord
+cargo run -- --selftest   # publishes a fixed activity and keeps it up
 ```
 
-Compruébalo **desde otra cuenta de Discord**: el propio perfil no muestra la
-tarjeta completa.
+Check it **from another Discord account**: your own profile doesn't show the full card.
 
-### Empaquetar el mod
+### Package the mod
 
 ```bash
 python scripts/package_mod.py
 ```
 
-Copia el zip resultante de `dist/` a tu carpeta `mods` de Factorio.
+Copy the resulting zip from `dist/` to your Factorio `mods` folder.
 
-### Compilar el instalador
+### Build the installer
 
 ```bash
 cargo build --release
-ISCC.exe /DAppVersion=0.1.0 installer\factorio-discord-rp.iss
+ISCC.exe /DAppVersion=0.5.0 installer\factorio-discord-rp.iss
 ```
 
-`FACTORIO_DRP_DEFAULT_APP_ID`, puesto antes de `cargo build`, incluye un Application
-ID por defecto en el binario (lo hace la CI con una variable del repositorio); sin
-él, cada usuario necesita su propio `config.toml`.
+`FACTORIO_DRP_DEFAULT_APP_ID`, set before `cargo build`, bakes a default Application ID
+into the binary (the CI does this with a repository variable); without it, every user
+needs their own `config.toml`.
 
-### Tests y lint
+### Tests and lint
 
 ```bash
 cargo test
@@ -153,25 +151,26 @@ cargo fmt --all --check
 cargo clippy --all-targets -- -D warnings
 ```
 
-### Abrirla junto con Factorio a mano
+### Launching it alongside Factorio by hand
 
-Es lo que hace el instalador por ti. Para hacerlo sin él, en Steam → Factorio →
-Propiedades → Opciones de lanzamiento:
+This is what the installer does for you. To do it without the installer, in
+Steam → Factorio → Properties → Launch Options:
 
 ```
-"C:\ruta\a\factorio-discord-rp.exe" %command%
+"C:\path\to\factorio-discord-rp.exe" %command%
 ```
 
-La aplicación arranca Factorio, publica mientras siga abierto y se cierra sola
-poco después de que lo cierres. Todo lo que sigue a la ruta del juego es del juego,
-así que tus otras opciones de lanzamiento siguen funcionando.
+The app launches Factorio, publishes while it stays open, and closes itself shortly
+after you close it. Everything after the game's path belongs to the game, so your other
+launch options keep working.
 
-- Si ya la tienes en la bandeja con **Arrancar con Windows**, esa copia es la que
-  publica y esta sólo lanza el juego: nunca hay dos copias a la vez.
-- Si la configuración falla, Factorio arranca igualmente, sin presencia. El motivo
-  queda en el registro (`%APPDATA%\factorio-discord-rp\factorio-discord-rp.log`).
-- El `config.toml` se busca junto al `.exe` y en `%APPDATA%\factorio-discord-rp\`.
+- If you already have it in the tray via **Start with Windows**, that copy is the one
+  publishing, and this one just launches the game: there are never two copies at once.
+- If the setup fails, Factorio still starts, without presence. The reason is in the log
+  (`%APPDATA%\factorio-discord-rp\factorio-discord-rp.log`).
+- `config.toml` is looked up next to the `.exe` and in
+  `%APPDATA%\factorio-discord-rp\`.
 
-## Licencia
+## License
 
 [MIT](LICENSE)
