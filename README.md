@@ -136,7 +136,7 @@ Copy the resulting zip from `dist/` to your Factorio `mods` folder.
 
 ```bash
 cargo build --release
-ISCC.exe /DAppVersion=0.5.0 installer\factorio-discord-rp.iss
+ISCC.exe /DAppVersion=0.5.1 installer\factorio-discord-rp.iss
 ```
 
 `FACTORIO_DRP_DEFAULT_APP_ID`, set before `cargo build`, bakes a default Application ID
