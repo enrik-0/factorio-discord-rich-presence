@@ -80,9 +80,9 @@ impl Default for Templates {
     fn default() -> Self {
         Self {
             details: "{planet} · {save}".into(),
-            state: "Investigando {research} ({research_pct}%)".into(),
+            state: "Researching {research} ({research_pct}%)".into(),
             // Sin icono pequeño, el modo de juego se refugia en este tooltip.
-            large_text: "{planet} · {tech_done}/{tech_total} tecnologías · {mode}".into(),
+            large_text: "{planet} · {tech_done}/{tech_total} technologies · {mode}".into(),
             fallback: Fallback::default(),
         }
     }
@@ -91,7 +91,7 @@ impl Default for Templates {
 impl Default for Fallback {
     fn default() -> Self {
         Self {
-            state: "{tech_done}/{tech_total} tecnologías".into(),
+            state: "{tech_done}/{tech_total} technologies".into(),
         }
     }
 }

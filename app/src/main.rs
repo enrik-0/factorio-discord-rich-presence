@@ -416,10 +416,10 @@ fn run_selftest(config: &Config) -> Result<()> {
     // Un save ficticio con 4 h 12 min de juego, para comprobar el cronómetro.
     let playtime_secs = 4 * 3600 + 12 * 60;
     let spec = ActivitySpec {
-        details: Some("Fulgora · Cohetes S.A.".into()),
-        state: Some("Investigando Planta electromagnética (64%)".into()),
+        details: Some("Fulgora · Rocket Co.".into()),
+        state: Some("Researching Electromagnetic plant (64%)".into()),
         large_image: Some(config.large_image.clone()),
-        large_text: Some("Fulgora · 142/247 tecnologías".into()),
+        large_text: Some("Fulgora · 142/247 technologies".into()),
         small_image: None,
         small_text: None,
         start_timestamp: Some(unix_now() - playtime_secs),

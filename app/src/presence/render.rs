@@ -69,7 +69,7 @@ fn build_vars(state: &GameState, privacy: &Privacy) -> HashMap<&'static str, Str
     if let Some(surface) = &state.surface {
         vars.insert("surface", surface.name.clone());
         let pretty = match surface.kind.as_str() {
-            "platform" => "Plataforma espacial".to_string(),
+            "platform" => "Space platform".to_string(),
             _ => prettify(&surface.name),
         };
         vars.insert("planet", pretty);
@@ -115,8 +115,8 @@ fn build_vars(state: &GameState, privacy: &Privacy) -> HashMap<&'static str, Str
     vars.insert(
         "mode",
         match state.multiplayer {
-            Some(true) => "Multijugador".to_string(),
-            _ => "Un jugador".to_string(),
+            Some(true) => "Multiplayer".to_string(),
+            _ => "Singleplayer".to_string(),
         },
     );
 
@@ -201,8 +201,8 @@ mod tests {
     #[test]
     fn sustituye_variables() {
         assert_eq!(
-            render_template("Investigando {research} ({research_pct}%)", &vars()).as_deref(),
-            Some("Investigando Planta electromagnética (64%)")
+            render_template("Researching {research} ({research_pct}%)", &vars()).as_deref(),
+            Some("Researching Planta electromagnética (64%)")
         );
     }
 

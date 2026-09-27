@@ -43,13 +43,13 @@ pub fn build(state: &GameState, privacy: &Privacy) -> ActivitySpec {
         if let Some(research) = &state.research {
             match (research.label(), research.percent()) {
                 (Some(label), Some(percent)) => {
-                    line2.push(format!("Investigando {} ({}%)", prettify(label), percent));
+                    line2.push(format!("Researching {} ({}%)", prettify(label), percent));
                 }
-                (Some(label), None) => line2.push(format!("Investigando {}", prettify(label))),
+                (Some(label), None) => line2.push(format!("Researching {}", prettify(label))),
                 // Sin nada en cola la línea quedaría vacía; el contador de
                 // tecnologías es el respaldo natural.
                 (None, _) if display.tech_count => {
-                    line2.push(format!("{}/{} tecnologías", research.done, research.total));
+                    line2.push(format!("{}/{} technologies", research.done, research.total));
                 }
                 _ => {}
             }
@@ -60,20 +60,20 @@ pub fn build(state: &GameState, privacy: &Privacy) -> ActivitySpec {
     let mut tooltip = Vec::new();
     if display.tech_count {
         if let Some(research) = &state.research {
-            tooltip.push(format!("{}/{} tecnologías", research.done, research.total));
+            tooltip.push(format!("{}/{} technologies", research.done, research.total));
         }
     }
     if display.evolution {
         if let Some(evolution) = state.evolution {
-            tooltip.push(format!("Evolución {}%", (evolution * 100.0).round() as i64));
+            tooltip.push(format!("Evolution {}%", (evolution * 100.0).round() as i64));
         }
     }
     if display.rockets {
         // Se oculta mientras no haya lanzado ninguno: un "0 cohetes" no aporta.
         if let Some(rockets) = state.rockets_launched.filter(|count| *count > 0) {
             tooltip.push(match rockets {
-                1 => "1 cohete".to_string(),
-                n => format!("{n} cohetes"),
+                1 => "1 rocket".to_string(),
+                n => format!("{n} rockets"),
             });
         }
     }
@@ -82,24 +82,24 @@ pub fn build(state: &GameState, privacy: &Privacy) -> ActivitySpec {
     if display.trees {
         if let Some(count) = state.trees_razed.filter(|count| *count > 0) {
             tooltip.push(match count {
-                1 => "1 árbol arrasado".to_string(),
-                n => format!("{} árboles arrasados", format_count(n as f64)),
+                1 => "1 tree razed".to_string(),
+                n => format!("{} trees razed", format_count(n as f64)),
             });
         }
     }
     if display.enemies {
         if let Some(count) = state.enemies_killed.filter(|count| *count > 0) {
             tooltip.push(match count {
-                1 => "1 enemigo abatido".to_string(),
-                n => format!("{} enemigos abatidos", format_count(n as f64)),
+                1 => "1 enemy killed".to_string(),
+                n => format!("{} enemies killed", format_count(n as f64)),
             });
         }
     }
     if display.deaths {
         if let Some(count) = state.player_deaths.filter(|count| *count > 0) {
             tooltip.push(match count {
-                1 => "1 muerte".to_string(),
-                n => format!("{} muertes", format_count(n as f64)),
+                1 => "1 death".to_string(),
+                n => format!("{} deaths", format_count(n as f64)),
             });
         }
     }
@@ -107,7 +107,7 @@ pub fn build(state: &GameState, privacy: &Privacy) -> ActivitySpec {
     // arriba, un valor bajo aquí no es menos interesante que uno alto.
     if display.pollution {
         if let Some(pollution) = state.pollution_emitted {
-            tooltip.push(format!("Contaminación {}", format_count(pollution)));
+            tooltip.push(format!("Pollution {}", format_count(pollution)));
         }
     }
     if display.afk {
@@ -175,16 +175,16 @@ fn party_size(state: &GameState) -> Option<(i32, i32)> {
 fn planet_label(state: &GameState) -> Option<String> {
     let surface = state.surface.as_ref()?;
     Some(match surface.kind.as_str() {
-        "platform" => "Plataforma espacial".to_string(),
+        "platform" => "Space platform".to_string(),
         _ => prettify(&surface.name),
     })
 }
 
 fn mode_label(state: &GameState) -> String {
     match (state.multiplayer, state.players_online) {
-        (Some(true), Some(players)) => format!("Multijugador ({players})"),
-        (Some(true), None) => "Multijugador".to_string(),
-        _ => "Un jugador".to_string(),
+        (Some(true), Some(players)) => format!("Multiplayer ({players})"),
+        (Some(true), None) => "Multiplayer".to_string(),
+        _ => "Singleplayer".to_string(),
     }
 }
 
@@ -297,12 +297,12 @@ mod tests {
         assert_eq!(spec.details.as_deref(), Some("claro · Nauvis"));
         assert_eq!(
             spec.state.as_deref(),
-            Some("Investigando Extracción de petróleo (88%)")
+            Some("Researching Extracción de petróleo (88%)")
         );
         // Sin cohetes (son 0) ni evolución ni mods, que van apagados de fábrica.
         assert_eq!(
             spec.large_text.as_deref(),
-            Some("41/1510 tecnologías · Un jugador")
+            Some("41/1510 technologies · Singleplayer")
         );
     }
 
@@ -320,7 +320,7 @@ mod tests {
         assert_eq!(spec.details.as_deref(), Some("claro · Nauvis · Krastorio2"));
         assert_eq!(
             spec.large_text.as_deref(),
-            Some("41/1510 tecnologías · Evolución 12% · 240 mods · Un jugador")
+            Some("41/1510 technologies · Evolution 12% · 240 mods · Singleplayer")
         );
     }
 
@@ -348,19 +348,19 @@ mod tests {
         assert!(!build(&state, &Privacy::default())
             .large_text
             .unwrap()
-            .contains("cohete"));
+            .contains("rocket"));
 
         state.rockets_launched = Some(1);
         assert!(build(&state, &Privacy::default())
             .large_text
             .unwrap()
-            .contains("1 cohete"));
+            .contains("1 rocket"));
 
         state.rockets_launched = Some(12);
         assert!(build(&state, &Privacy::default())
             .large_text
             .unwrap()
-            .contains("12 cohetes"));
+            .contains("12 rockets"));
     }
 
     #[test]
@@ -376,25 +376,25 @@ mod tests {
         state.enemies_killed = Some(0);
         state.player_deaths = Some(0);
         let empty = build(&state, &Privacy::default()).large_text.unwrap();
-        assert!(!empty.contains("árbol"));
-        assert!(!empty.contains("enemigo"));
-        assert!(!empty.contains("muerte"));
+        assert!(!empty.contains("tree"));
+        assert!(!empty.contains("enemy") && !empty.contains("enemies"));
+        assert!(!empty.contains("death"));
 
         state.trees_razed = Some(1);
         state.enemies_killed = Some(1);
         state.player_deaths = Some(1);
         let singular = build(&state, &Privacy::default()).large_text.unwrap();
-        assert!(singular.contains("1 árbol arrasado"));
-        assert!(singular.contains("1 enemigo abatido"));
-        assert!(singular.contains("1 muerte") && !singular.contains("1 muertes"));
+        assert!(singular.contains("1 tree razed"));
+        assert!(singular.contains("1 enemy killed"));
+        assert!(singular.contains("1 death") && !singular.contains("1 deaths"));
 
         state.trees_razed = Some(2_500);
         state.enemies_killed = Some(58);
         state.player_deaths = Some(3);
         let plural = build(&state, &Privacy::default()).large_text.unwrap();
-        assert!(plural.contains("2.5k árboles arrasados"));
-        assert!(plural.contains("58 enemigos abatidos"));
-        assert!(plural.contains("3 muertes"));
+        assert!(plural.contains("2.5k trees razed"));
+        assert!(plural.contains("58 enemies killed"));
+        assert!(plural.contains("3 deaths"));
     }
 
     #[test]
@@ -410,7 +410,7 @@ mod tests {
 
         let spec = build(&state, &Privacy::default());
         let text = spec.large_text.unwrap();
-        assert!(text.contains("Contaminación 0"));
+        assert!(text.contains("Pollution 0"));
         assert!(text.contains("AFK 0 min"));
     }
 
@@ -422,7 +422,7 @@ mod tests {
         });
         state.pollution_emitted = Some(1_234_567.0);
         let text = build(&state, &Privacy::default()).large_text.unwrap();
-        assert!(text.contains("Contaminación 1.2M"), "{text}");
+        assert!(text.contains("Pollution 1.2M"), "{text}");
     }
 
     #[test]
@@ -520,7 +520,7 @@ mod tests {
         });
         assert_eq!(
             build(&state, &Privacy::default()).state.as_deref(),
-            Some("41/1510 tecnologías")
+            Some("41/1510 technologies")
         );
     }
 
@@ -535,7 +535,7 @@ mod tests {
         };
         let spec = build(&state, &Privacy::default());
         assert_eq!(spec.details.as_deref(), Some("claro"));
-        assert_eq!(spec.large_text.as_deref(), Some("Un jugador"));
+        assert_eq!(spec.large_text.as_deref(), Some("Singleplayer"));
         assert_eq!(
             spec.start_timestamp, None,
             "sin el mod no hay tiempo jugado"
@@ -548,7 +548,7 @@ mod tests {
         state.multiplayer = Some(true);
         state.players_online = Some(4);
         let spec = build(&state, &Privacy::default());
-        assert!(spec.large_text.unwrap().contains("Multijugador (4)"));
+        assert!(spec.large_text.unwrap().contains("Multiplayer (4)"));
         assert_eq!(spec.party, Some((4, 4)));
     }
 

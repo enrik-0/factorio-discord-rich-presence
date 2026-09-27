@@ -44,8 +44,8 @@ share_save_name = true
 
 # [templates]
 # details    = "{planet} · {save}"
-# state      = "Investigando {research} ({research_pct}%)"
-# large_text = "{planet} · {tech_done}/{tech_total} tecnologías · {mode}"
+# state      = "Researching {research} ({research_pct}%)"
+# large_text = "{planet} · {tech_done}/{tech_total} technologies · {mode}"
 #
 # [templates.fallback]
-# state = "{tech_done}/{tech_total} tecnologías"
+# state = "{tech_done}/{tech_total} technologies"
