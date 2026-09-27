@@ -32,6 +32,17 @@ pub struct GameState {
     pub evolution: Option<f64>,
     /// Tiempo de esta sesión, frente a `ticks_played` que es el del save.
     pub session_ticks: Option<u64>,
+    // --- estadísticas "meme" ---
+    pub trees_razed: Option<u64>,
+    pub enemies_killed: Option<u64>,
+    pub player_deaths: Option<u64>,
+    /// De todas las superficies del juego, no sólo de la fuerza: la API no
+    /// permite separarla por fuerza (ver `collect.total_pollution` en el mod).
+    pub pollution_emitted: Option<f64>,
+    /// Ticks desde la última acción del jugador. Valor en vivo: no viene de
+    /// una caché, así que puede no coincidir exactamente con lo que el
+    /// jugador ve en pantalla en este mismo instante.
+    pub afk_ticks: Option<u64>,
     /// Instante Unix (segundos) en que el mod escribió los datos de arriba.
     ///
     /// Es el ancla del cronómetro: `ticks_played` y `session_ticks` describen ese
@@ -58,6 +69,11 @@ impl GameState {
     /// Tiempo de la sesión actual, en segundos.
     pub fn session_secs(&self) -> Option<i64> {
         self.session_ticks.map(|ticks| (ticks / 60) as i64)
+    }
+
+    /// Tiempo AFK, en segundos.
+    pub fn afk_secs(&self) -> Option<i64> {
+        self.afk_ticks.map(|ticks| (ticks / 60) as i64)
     }
 
     /// Preferencias del jugador, o las de fábrica si el mod no está.
@@ -120,6 +136,11 @@ pub struct Display {
     pub tech_count: bool,
     pub evolution: bool,
     pub rockets: bool,
+    pub trees: bool,
+    pub enemies: bool,
+    pub deaths: bool,
+    pub pollution: bool,
+    pub afk: bool,
     pub mod_count: bool,
     pub mode: bool,
     pub player_name: bool,
@@ -137,6 +158,11 @@ impl Default for Display {
             tech_count: true,
             evolution: false,
             rockets: true,
+            trees: false,
+            enemies: false,
+            deaths: false,
+            pollution: false,
+            afk: false,
             mod_count: false,
             mode: true,
             player_name: false,
@@ -216,6 +242,16 @@ pub struct ModState {
     pub research: Option<Research>,
     #[serde(default)]
     pub evolution: Option<f64>,
+    #[serde(default)]
+    pub trees_razed: Option<u64>,
+    #[serde(default)]
+    pub enemies_killed: Option<u64>,
+    #[serde(default)]
+    pub player_deaths: Option<u64>,
+    #[serde(default)]
+    pub pollution_emitted: Option<f64>,
+    #[serde(default)]
+    pub afk_ticks: Option<u64>,
     #[serde(default)]
     pub display: Option<Display>,
     /// No viene en el JSON: lo rellena el lector con la fecha del fichero.

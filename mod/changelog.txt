@@ -1,4 +1,13 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.3.0
+Date: 2026-09-27
+  Features:
+    - Nuevos contadores "meme", al pasar el ratón: árboles arrasados, enemigos abatidos,
+      muertes, contaminación emitida y tiempo AFK. Todos apagados por defecto. Árboles,
+      enemigos y muertes se ocultan mientras sean cero, como ya pasaba con los cohetes.
+    - La contaminación no es por fuerza (el juego no lo permite): es el total de todas
+      las superficies de la partida.
+---------------------------------------------------------------------------------------------------
 Version: 0.2.2
 Date: 2026-09-26
   Bugfixes:

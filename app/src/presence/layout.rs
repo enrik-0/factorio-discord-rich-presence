@@ -77,6 +77,44 @@ pub fn build(state: &GameState, privacy: &Privacy) -> ActivitySpec {
             });
         }
     }
+    // Estadísticas "meme": árboles, enemigos y muertes se ocultan a cero, igual
+    // que los cohetes — un "0 muertes" nada más empezar no aporta nada.
+    if display.trees {
+        if let Some(count) = state.trees_razed.filter(|count| *count > 0) {
+            tooltip.push(match count {
+                1 => "1 árbol arrasado".to_string(),
+                n => format!("{} árboles arrasados", format_count(n as f64)),
+            });
+        }
+    }
+    if display.enemies {
+        if let Some(count) = state.enemies_killed.filter(|count| *count > 0) {
+            tooltip.push(match count {
+                1 => "1 enemigo abatido".to_string(),
+                n => format!("{} enemigos abatidos", format_count(n as f64)),
+            });
+        }
+    }
+    if display.deaths {
+        if let Some(count) = state.player_deaths.filter(|count| *count > 0) {
+            tooltip.push(match count {
+                1 => "1 muerte".to_string(),
+                n => format!("{} muertes", format_count(n as f64)),
+            });
+        }
+    }
+    // La contaminación y el AFK sí se muestran a cero: a diferencia de los de
+    // arriba, un valor bajo aquí no es menos interesante que uno alto.
+    if display.pollution {
+        if let Some(pollution) = state.pollution_emitted {
+            tooltip.push(format!("Contaminación {}", format_count(pollution)));
+        }
+    }
+    if display.afk {
+        if let Some(secs) = state.afk_secs() {
+            tooltip.push(format!("AFK {}", format_afk(secs)));
+        }
+    }
     if display.mod_count {
         if let Some(count) = state.mod_count.filter(|count| *count > 0) {
             tooltip.push(format!("{count} mods"));
@@ -147,6 +185,31 @@ fn mode_label(state: &GameState) -> String {
         (Some(true), Some(players)) => format!("Multijugador ({players})"),
         (Some(true), None) => "Multijugador".to_string(),
         _ => "Un jugador".to_string(),
+    }
+}
+
+/// Formatea un número potencialmente grande de forma compacta: `950`, `1.2k`,
+/// `3.4M`. La contaminación y, en partidas largas, los árboles arrasados
+/// pueden llegar a cientos de miles.
+fn format_count(n: f64) -> String {
+    let n = n.round();
+    if n.abs() < 1000.0 {
+        format!("{n:.0}")
+    } else if n.abs() < 1_000_000.0 {
+        format!("{:.1}k", n / 1000.0)
+    } else {
+        format!("{:.1}M", n / 1_000_000.0)
+    }
+}
+
+/// `125` → `2 min`, `4200` → `1h 10min`. Sólo horas y minutos: los segundos no
+/// aportan nada para "cuánto llevas sin tocar nada".
+fn format_afk(total_secs: i64) -> String {
+    let minutes = total_secs / 60;
+    if minutes < 60 {
+        format!("{minutes} min")
+    } else {
+        format!("{}h {:02}min", minutes / 60, minutes % 60)
     }
 }
 
@@ -298,6 +361,79 @@ mod tests {
             .large_text
             .unwrap()
             .contains("12 cohetes"));
+    }
+
+    #[test]
+    fn arboles_enemigos_y_muertes_se_ocultan_mientras_sean_cero() {
+        let display = Display {
+            trees: true,
+            enemies: true,
+            deaths: true,
+            ..Display::default()
+        };
+        let mut state = with_display(display);
+        state.trees_razed = Some(0);
+        state.enemies_killed = Some(0);
+        state.player_deaths = Some(0);
+        let empty = build(&state, &Privacy::default()).large_text.unwrap();
+        assert!(!empty.contains("árbol"));
+        assert!(!empty.contains("enemigo"));
+        assert!(!empty.contains("muerte"));
+
+        state.trees_razed = Some(1);
+        state.enemies_killed = Some(1);
+        state.player_deaths = Some(1);
+        let singular = build(&state, &Privacy::default()).large_text.unwrap();
+        assert!(singular.contains("1 árbol arrasado"));
+        assert!(singular.contains("1 enemigo abatido"));
+        assert!(singular.contains("1 muerte") && !singular.contains("1 muertes"));
+
+        state.trees_razed = Some(2_500);
+        state.enemies_killed = Some(58);
+        state.player_deaths = Some(3);
+        let plural = build(&state, &Privacy::default()).large_text.unwrap();
+        assert!(plural.contains("2.5k árboles arrasados"));
+        assert!(plural.contains("58 enemigos abatidos"));
+        assert!(plural.contains("3 muertes"));
+    }
+
+    #[test]
+    fn contaminacion_y_afk_se_muestran_aunque_sean_cero() {
+        let display = Display {
+            pollution: true,
+            afk: true,
+            ..Display::default()
+        };
+        let mut state = with_display(display);
+        state.pollution_emitted = Some(0.0);
+        state.afk_ticks = Some(0);
+
+        let spec = build(&state, &Privacy::default());
+        let text = spec.large_text.unwrap();
+        assert!(text.contains("Contaminación 0"));
+        assert!(text.contains("AFK 0 min"));
+    }
+
+    #[test]
+    fn la_contaminacion_grande_se_formatea_de_forma_compacta() {
+        let mut state = with_display(Display {
+            pollution: true,
+            ..Display::default()
+        });
+        state.pollution_emitted = Some(1_234_567.0);
+        let text = build(&state, &Privacy::default()).large_text.unwrap();
+        assert!(text.contains("Contaminación 1.2M"), "{text}");
+    }
+
+    #[test]
+    fn el_afk_pasa_a_horas_y_minutos() {
+        let mut state = with_display(Display {
+            afk: true,
+            ..Display::default()
+        });
+        state.afk_ticks = Some(70 * 60 * 60); // 70 minutos en ticks (60 t/s)
+        let text = build(&state, &Privacy::default()).large_text.unwrap();
+        assert!(text.contains("AFK 1h 10min"), "{text}");
     }
 
     #[test]

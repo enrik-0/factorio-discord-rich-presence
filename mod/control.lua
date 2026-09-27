@@ -142,12 +142,31 @@ local function build_display(settings)
     tech_count = settings["drp-show-tech-count"].value,
     evolution = settings["drp-show-evolution"].value,
     rockets = settings["drp-show-rockets"].value,
+    trees = settings["drp-show-trees"].value,
+    enemies = settings["drp-show-enemies"].value,
+    deaths = settings["drp-show-deaths"].value,
+    pollution = settings["drp-show-pollution"].value,
+    afk = settings["drp-show-afk"].value,
     mod_count = settings["drp-show-mod-count"].value,
     mode = settings["drp-show-mode"].value,
     player_name = settings["drp-show-player-name"].value,
     server = settings["drp-show-server"].value,
     timer = settings["drp-timer"].value,
   }
+end
+
+-- Bajas y muertes de una fuerza, calculadas como mucho una vez por escritura:
+-- si varios jugadores comparten fuerza, la segunda consulta reutiliza la
+-- primera en vez de repetir el recorrido de todas las superficies.
+local function combat_stats_of(force, cache)
+  local cached = cache[force.index]
+  if cached then
+    return cached
+  end
+  local enemies, trees, deaths = collect.combat_stats(force)
+  local stats = { enemies = enemies, trees = trees, deaths = deaths }
+  cache[force.index] = stats
+  return stats
 end
 
 local function write_state()
@@ -159,6 +178,9 @@ local function write_state()
   storage.seq = storage.seq + 1
   local mod_count = count_mods()
   local overhaul = detect_overhaul()
+  -- No es por fuerza (ver collect.total_pollution): se calcula una sola vez.
+  local pollution = collect.total_pollution()
+  local combat_cache = {}
 
   for _, player in pairs(players) do
     local settings = player.mod_settings
@@ -186,6 +208,8 @@ local function write_state()
         translations = storage.translations[player.index],
         display = build_display(settings),
         session_start = session_start[player.index],
+        combat = combat_stats_of(force, combat_cache),
+        pollution = pollution,
       })
 
       -- `for_player` hace que cada cliente escriba sólo su propio fichero:
@@ -293,4 +317,16 @@ commands.add_command("drp-debug", { "drp.debug-help" }, function(event)
     storage.seq or 0
   ))
   player.print("[Discord RP] fichero: script-output/" .. OUTPUT_FILE)
+
+  -- Sin caché, recalculado al vuelo: sirve para contrastar contra el propio
+  -- juego (F4 > kill_count_statistics, o el panel de "Producción" > Bajas).
+  local enemies, trees, deaths = collect.combat_stats(player.force)
+  player.print(string.format(
+    "[Discord RP] enemigos %d | árboles %d | muertes %d | contaminación %.0f | afk %d ticks",
+    enemies,
+    trees,
+    deaths,
+    collect.total_pollution(),
+    player.afk_time
+  ))
 end)

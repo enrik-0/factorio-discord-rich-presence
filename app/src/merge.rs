@@ -37,6 +37,11 @@ pub fn merge(running: bool, log: &LogFacts, mod_state: Option<&ModState>) -> Gam
         state.overhaul = data.mods.overhaul.clone();
         state.multiplayer = Some(data.game.multiplayer);
         state.evolution = data.evolution;
+        state.trees_razed = data.trees_razed;
+        state.enemies_killed = data.enemies_killed;
+        state.player_deaths = data.player_deaths;
+        state.pollution_emitted = data.pollution_emitted;
+        state.afk_ticks = data.afk_ticks;
         state.session_ticks = data.game.session_ticks;
         state.sampled_at = data.sampled_at;
         state.display = data.display.clone();
@@ -90,6 +95,11 @@ mod tests {
                 total: 247,
             }),
             evolution: Some(0.42),
+            trees_razed: Some(1_337),
+            enemies_killed: Some(58),
+            player_deaths: Some(3),
+            pollution_emitted: Some(98_765.4),
+            afk_ticks: Some(120),
             display: None,
             sampled_at: Some(1_700_000_000),
         }
@@ -139,6 +149,16 @@ mod tests {
     fn la_hora_de_escritura_del_mod_llega_al_estado() {
         let state = merge(true, &log_facts(), Some(&mod_state()));
         assert_eq!(state.sampled_at, Some(1_700_000_000));
+    }
+
+    #[test]
+    fn las_estadisticas_meme_llegan_al_estado() {
+        let state = merge(true, &log_facts(), Some(&mod_state()));
+        assert_eq!(state.trees_razed, Some(1_337));
+        assert_eq!(state.enemies_killed, Some(58));
+        assert_eq!(state.player_deaths, Some(3));
+        assert_eq!(state.pollution_emitted, Some(98_765.4));
+        assert_eq!(state.afk_ticks, Some(120));
     }
 
     #[test]
