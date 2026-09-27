@@ -97,8 +97,9 @@ pub fn locate() -> Result<Steam> {
 }
 
 /// Cuenta con la sesión iniciada. Por orden de fiabilidad:
-/// 1. `ActiveUser` del registro (sólo vale mientras Steam está abierto);
-/// 2. la marcada `MostRecent` en `loginusers.vdf`;
+/// 1. `ActiveUser` del registro (sólo vale mientras Steam está abierto: en
+///    frío vale 0, que aquí se descarta);
+/// 2. la de `loginusers.vdf` — ver [`parse_active_account`];
 /// 3. la única carpeta de `userdata`, si sólo hay una.
 fn active_account(root: &Path) -> Result<u32> {
     if let Some(user) = registry::read_dword(r"Software\Valve\Steam\ActiveProcess", "ActiveUser") {
@@ -108,7 +109,7 @@ fn active_account(root: &Path) -> Result<u32> {
     }
 
     if let Ok(text) = std::fs::read_to_string(root.join("config").join("loginusers.vdf")) {
-        if let Some(account) = parse_most_recent_account(&text) {
+        if let Some(account) = parse_active_account(&text) {
             return Ok(account);
         }
     }
@@ -158,30 +159,55 @@ pub fn parse_library_paths(text: &str) -> Vec<PathBuf> {
         .collect()
 }
 
-/// Id de cuenta del usuario marcado `MostRecent "1"` en `loginusers.vdf`.
+/// Id de cuenta más probable de `loginusers.vdf`.
 ///
-/// Cada usuario es un bloque cuyo nombre es su SteamID64 (17 dígitos).
-pub fn parse_most_recent_account(text: &str) -> Option<u32> {
-    let mut current: Option<u64> = None;
+/// Cada usuario es un bloque cuyo nombre es su SteamID64 (17 dígitos). Se
+/// prueban, en orden:
+/// 1. el marcado `MostRecent "1"` — algunas versiones de Steam lo escriben;
+/// 2. si sólo hay una cuenta recordada, ésa, tenga o no las claves de arriba —
+///    es el caso real más común y el que falla si no se cubre aparte: con
+///    Steam cerrado no hay ninguna otra pista;
+/// 3. si hay varias y ninguna está marcada, la de `Timestamp` más alto (el
+///    último inicio de sesión).
+pub fn parse_active_account(text: &str) -> Option<u32> {
+    let mut accounts: Vec<(u64, bool, u64)> = Vec::new(); // (SteamID64, MostRecent, Timestamp)
+    let mut current: Option<usize> = None; // índice en `accounts` del bloque en curso
 
     for line in text.lines() {
-        let Some((key, value)) = quoted_pair(line) else {
-            // Línea con una sola cadena: puede ser el nombre de un bloque.
-            let name = line.trim().trim_matches('"');
-            if name.len() == 17 && name.bytes().all(|b| b.is_ascii_digit()) {
-                current = name.parse().ok();
+        if let Some((key, value)) = quoted_pair(line) {
+            let Some(entry) = current.map(|i| &mut accounts[i]) else {
+                continue;
+            };
+            if key.eq_ignore_ascii_case("MostRecent") && value == "1" {
+                entry.1 = true;
+            } else if key.eq_ignore_ascii_case("Timestamp") {
+                entry.2 = value.parse().unwrap_or(0);
             }
             continue;
-        };
+        }
 
-        if key.eq_ignore_ascii_case("MostRecent") && value == "1" {
-            return current
-                .and_then(|id| id.checked_sub(STEAM_ID64_BASE))
-                .and_then(|account| u32::try_from(account).ok());
+        // Línea con una sola cadena: puede ser el SteamID64 que abre un bloque.
+        let name = line.trim().trim_matches('"');
+        if name.len() == 17 && name.bytes().all(|b| b.is_ascii_digit()) {
+            if let Ok(id) = name.parse() {
+                current = Some(accounts.len());
+                accounts.push((id, false, 0));
+            }
         }
     }
 
-    None
+    let chosen = accounts
+        .iter()
+        .find(|(_, most_recent, _)| *most_recent)
+        .or_else(|| match accounts.as_slice() {
+            [only] => Some(only),
+            _ => accounts.iter().max_by_key(|(_, _, timestamp)| *timestamp),
+        })?;
+
+    chosen
+        .0
+        .checked_sub(STEAM_ID64_BASE)
+        .and_then(|account| u32::try_from(account).ok())
 }
 
 //------------------------------------------------------------------------------
@@ -280,19 +306,38 @@ mod tests {
         assert!(parse_library_paths("\"libraryfolders\"\n{\n}\n").is_empty());
     }
 
-    const LOGINUSERS: &str = "\"users\"\n{\n\t\"76561198000000001\"\n\t{\n\t\t\"AccountName\"\t\t\"vieja\"\n\t\t\"MostRecent\"\t\t\"0\"\n\t}\n\t\"76561198236141462\"\n\t{\n\t\t\"AccountName\"\t\t\"actual\"\n\t\t\"MostRecent\"\t\t\"1\"\n\t}\n}\n";
+    const LOGINUSERS: &str = "\"users\"\n{\n\t\"76561198000000001\"\n\t{\n\t\t\"AccountName\"\t\t\"vieja\"\n\t\t\"MostRecent\"\t\t\"0\"\n\t\t\"Timestamp\"\t\t\"1000\"\n\t}\n\t\"76561198236141462\"\n\t{\n\t\t\"AccountName\"\t\t\"actual\"\n\t\t\"MostRecent\"\t\t\"1\"\n\t\t\"Timestamp\"\t\t\"500\"\n\t}\n}\n";
+
+    // El formato real capturado en este equipo: una sola cuenta recordada, sin
+    // MostRecent (esta versión de Steam no lo escribe), sólo Timestamp. Es el
+    // caso que rompía la detección con Steam cerrado antes de este arreglo.
+    const LOGINUSERS_REAL: &str = "\"users\"\n{\n\t\"76561198236141462\"\n\t{\n\t\t\"AccountName\"\t\t\"puertollano7\"\n\t\t\"PersonaName\"\t\t\"enrik0\"\n\t\t\"RememberPassword\"\t\t\"1\"\n\t\t\"WantsOfflineMode\"\t\t\"0\"\n\t\t\"SkipOfflineModeWarning\"\t\t\"0\"\n\t\t\"AutoLogin\"\t\t\"1\"\n\t\t\"Timestamp\"\t\t\"1790450811\"\n\t}\n}\n";
 
     #[test]
-    fn la_cuenta_activa_es_la_marcada_most_recent() {
-        // 76561198236141462 - 76561197960265728 = 275875734
-        assert_eq!(parse_most_recent_account(LOGINUSERS), Some(275_875_734));
+    fn la_cuenta_activa_es_la_marcada_most_recent_aunque_no_sea_la_ultima() {
+        // 76561198236141462 - 76561197960265728 = 275875734. Tiene MostRecent
+        // pero un Timestamp menor que la otra cuenta: gana igualmente.
+        assert_eq!(parse_active_account(LOGINUSERS), Some(275_875_734));
     }
 
     #[test]
-    fn sin_most_recent_no_hay_cuenta() {
-        let sin = LOGINUSERS.replace("\"MostRecent\"\t\t\"1\"", "\"MostRecent\"\t\t\"0\"");
-        assert_eq!(parse_most_recent_account(&sin), None);
-        assert_eq!(parse_most_recent_account(""), None);
+    fn sin_most_recent_gana_el_timestamp_mas_alto() {
+        let sin = LOGINUSERS.replace("\"MostRecent\"\t\t\"1\"\n\t\t", "");
+        // Ahora ninguna tiene MostRecent; la de Timestamp 1000 (la "vieja") gana.
+        // 76561198000000001 - 76561197960265728 = 39734273
+        assert_eq!(parse_active_account(&sin), Some(39_734_273));
+    }
+
+    #[test]
+    fn una_sola_cuenta_recordada_se_usa_aunque_no_tenga_ninguna_marca() {
+        // Caso real: Steam cerrado, loginusers.vdf sin MostRecent, una cuenta.
+        assert_eq!(parse_active_account(LOGINUSERS_REAL), Some(275_875_734));
+    }
+
+    #[test]
+    fn sin_cuentas_no_hay_nada_que_elegir() {
+        assert_eq!(parse_active_account(""), None);
+        assert_eq!(parse_active_account("\"users\"\n{\n}\n"), None);
     }
 
     #[test]
