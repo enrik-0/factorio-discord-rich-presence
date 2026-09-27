@@ -179,4 +179,4 @@ así que tus otras opciones de lanzamiento siguen funcionando.
 
 ## Licencia
 
-MIT
+[MIT](LICENSE)
