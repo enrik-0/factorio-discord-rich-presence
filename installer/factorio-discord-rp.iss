@@ -38,11 +38,54 @@ ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
 
+; El primero de la lista es el que se usa por defecto en una instalación
+; silenciosa sin /LANG, y el preseleccionado en el selector de idioma.
 [Languages]
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
-FinishedLabel=¡Listo! [name] ya está instalado.%n%nSólo te falta el mod: instálalo desde el Mod Portal de Factorio, o desde el propio juego, en Mods.
+english.FinishedLabel=All done! [name] is installed.%n%nOne thing left: install the mod from the Factorio Mod Portal, or from the game itself, under Mods.
+spanish.FinishedLabel=¡Listo! [name] ya está instalado.%n%nSólo te falta el mod: instálalo desde el Mod Portal de Factorio, o desde el propio juego, en Mods.
+
+; Todo lo que el propio [Code] muestra en pantalla vive aquí, con las dos
+; variantes exigidas por Inno cuando hay más de un idioma declarado.
+[CustomMessages]
+english.HowCaption=How to set up Steam
+english.HowDescription=Automatic or manual?
+english.HowSubtext=Pick one. You can change it later by running this installer again.
+english.OptAuto=Automatic (recommended)
+english.OptManual=Manual
+english.CommandCaption=One last step
+english.CommandDescription=Paste this line into Factorio's launch options.
+english.CopyButton=Copy to clipboard
+english.PasteYourself=Paste it yourself: right-click Factorio > Properties > Launch Options.
+english.PasteIntro=Copy this line and paste it in Steam: right-click Factorio > Properties > Launch Options.
+english.CloseSteamAsk=To set up Steam automatically I need to close it for a moment.%n%nShall I close it and reopen it for you once I'm done?
+english.ReasonSteamOpen=Steam was open, so I haven't touched anything.
+english.ReasonNotFound=I couldn't find Steam or Factorio on this computer.
+english.ReasonOther=I couldn't set up Steam for you (code %1).
+english.UninstallCloseSteamAsk=To remove it from the launch options I need to close Steam for a moment.%n%nShall I close it and reopen it for you once I'm done?
+english.UninstallLeftover=The app is still in Factorio's launch options, in Steam.%n%nRemove it yourself when you get a chance: right-click Factorio > Properties > Launch Options. Otherwise, Steam won't be able to start the game.
+english.OpenModPage=Open the mod's page to install it
+
+spanish.HowCaption=Cómo configurar Steam
+spanish.HowDescription=¿Automático o manual?
+spanish.HowSubtext=Elige una opción. Podrás cambiarla volviendo a ejecutar este instalador.
+spanish.OptAuto=Automático (recomendado)
+spanish.OptManual=Manual
+spanish.CommandCaption=Un último paso
+spanish.CommandDescription=Pega esta línea en las opciones de lanzamiento de Factorio.
+spanish.CopyButton=Copiar al portapapeles
+spanish.PasteYourself=Pégala tú: clic derecho en Factorio > Propiedades > Opciones de lanzamiento.
+spanish.PasteIntro=Copia esta línea y pégala en Steam: clic derecho en Factorio > Propiedades > Opciones de lanzamiento.
+spanish.CloseSteamAsk=Para configurar Steam automáticamente necesito cerrarlo un momento.%n%n¿Lo cierro y te lo vuelvo a abrir en cuanto termine?
+spanish.ReasonSteamOpen=Steam estaba abierto, así que no he tocado nada.
+spanish.ReasonNotFound=No he encontrado Steam ni Factorio en este equipo.
+spanish.ReasonOther=No he podido configurar Steam por ti (código %1).
+spanish.UninstallCloseSteamAsk=Para quitarla de las opciones de lanzamiento necesito cerrar Steam un momento.%n%n¿Lo cierro y te lo vuelvo a abrir en cuanto termine?
+spanish.UninstallLeftover=La aplicación sigue en las opciones de lanzamiento de Factorio, en Steam.%n%nBórrala tú cuando puedas: clic derecho en Factorio > Propiedades > Opciones de lanzamiento. Si no, Steam no arrancará el juego.
+spanish.OpenModPage=Abrir la página del mod para instalarlo
 
 [Files]
 Source: "..\target\release\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
@@ -51,7 +94,7 @@ Source: "..\target\release\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"; Parameters: "--tray"
 
 [Run]
-Filename: "{#ModUrl}"; Description: "Abrir la página del mod para instalarlo"; Flags: shellexec postinstall skipifsilent
+Filename: "{#ModUrl}"; Description: "{cm:OpenModPage}"; Flags: shellexec postinstall skipifsilent
 
 [Code]
 const
@@ -102,18 +145,18 @@ end;
 procedure InitializeWizard;
 begin
   HowPage := CreateInputOptionPage(wpSelectDir,
-    'Cómo configurar Steam',
-    '¿Automático o manual?',
-    'Elige una opción. Podrás cambiarla volviendo a ejecutar este instalador.',
+    CustomMessage('HowCaption'),
+    CustomMessage('HowDescription'),
+    CustomMessage('HowSubtext'),
     True, False);
-  HowPage.Add('Automático (recomendado)');
-  HowPage.Add('Manual');
+  HowPage.Add(CustomMessage('OptAuto'));
+  HowPage.Add(CustomMessage('OptManual'));
   HowPage.SelectedValueIndex := ModeAuto;
 
   // Se coloca tras la instalación de los archivos y sólo aparece si hace falta.
   CommandPage := CreateCustomPage(wpInstalling,
-    'Un último paso',
-    'Pega esta línea en las opciones de lanzamiento de Factorio.');
+    CustomMessage('CommandCaption'),
+    CustomMessage('CommandDescription'));
 
   CommandIntro := TNewStaticText.Create(CommandPage);
   CommandIntro.Parent := CommandPage.Surface;
@@ -140,7 +183,7 @@ begin
   CopyButton.Top := ScaleY(144);
   CopyButton.Width := ScaleX(190);
   CopyButton.Height := ScaleY(26);
-  CopyButton.Caption := 'Copiar al portapapeles';
+  CopyButton.Caption := CustomMessage('CopyButton');
   CopyButton.OnClick := @CopyCommandClick;
 end;
 
@@ -169,11 +212,9 @@ begin
     CommandMemo.Text := '"' + AppPath + '" %command%';
 
   if ManualReason <> '' then
-    CommandIntro.Caption := ManualReason + #13#10#13#10 +
-      'Pégala tú: clic derecho en Factorio > Propiedades > Opciones de lanzamiento.'
+    CommandIntro.Caption := ManualReason + #13#10#13#10 + CustomMessage('PasteYourself')
   else
-    CommandIntro.Caption :=
-      'Copia esta línea y pégala en Steam: clic derecho en Factorio > Propiedades > Opciones de lanzamiento.';
+    CommandIntro.Caption := CustomMessage('PasteIntro');
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
@@ -200,14 +241,13 @@ begin
   begin
     // Steam abierto: sólo se cierra con permiso, y se reabre después.
     if SuppressibleMsgBox(
-         'Para configurar Steam automáticamente necesito cerrarlo un momento.' + #13#10#13#10 +
-         '¿Lo cierro y te lo vuelvo a abrir en cuanto termine?',
+         CustomMessage('CloseSteamAsk'),
          mbConfirmation, MB_YESNO, IDNO) = IDYES then
       Code := RunApp('--apply --close-steam --restart-steam')
     else
     begin
       NeedManual := True;
-      ManualReason := 'Steam estaba abierto, así que no he tocado nada.';
+      ManualReason := CustomMessage('ReasonSteamOpen');
       Exit;
     end;
   end;
@@ -216,9 +256,9 @@ begin
   begin
     NeedManual := True;
     case Code of
-      11: ManualReason := 'No he encontrado Steam ni Factorio en este equipo.';
+      11: ManualReason := CustomMessage('ReasonNotFound');
     else
-      ManualReason := 'No he podido configurar Steam por ti (código ' + IntToStr(Code) + ').';
+      ManualReason := FmtMessage(CustomMessage('ReasonOther'), [IntToStr(Code)]);
     end;
   end;
 end;
@@ -261,15 +301,10 @@ begin
     if UninstallSilent then
       Exit;
     if MsgBox(
-         'Para quitarla de las opciones de lanzamiento necesito cerrar Steam un momento.' + #13#10#13#10 +
-         '¿Lo cierro y te lo vuelvo a abrir en cuanto termine?',
+         CustomMessage('UninstallCloseSteamAsk'),
          mbConfirmation, MB_YESNO) = IDYES then
       Exec(Exe, '--uninstall --close-steam --restart-steam', '', SW_HIDE, ewWaitUntilTerminated, Code)
     else
-      MsgBox(
-        'La aplicación sigue en las opciones de lanzamiento de Factorio, en Steam.' + #13#10#13#10 +
-        'Bórrala tú cuando puedas: clic derecho en Factorio > Propiedades > Opciones de lanzamiento. ' +
-        'Si no, Steam no arrancará el juego.',
-        mbInformation, MB_OK);
+      MsgBox(CustomMessage('UninstallLeftover'), mbInformation, MB_OK);
   end;
 end;
