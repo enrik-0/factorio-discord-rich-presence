@@ -15,9 +15,11 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build the installer
-    runs-on: windows-latest
+  version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -40,6 +42,13 @@ jobs:
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+  build-windows:
+    name: Build the Windows installer
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
@@ -57,29 +66,82 @@ jobs:
       - name: Build the installer
         shell: cmd
         run: |
-          "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=${{ steps.version.outputs.version }} installer\factorio-discord-rp.iss
+          "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=${{ needs.version.outputs.version }} installer\factorio-discord-rp.iss
 
       - name: Compute the SHA-256
         id: hash
         shell: bash
         run: |
-          FILE="dist/FactorioDiscordRP-Setup-${{ steps.version.outputs.version }}.exe"
-          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          FILE="dist/FactorioDiscordRP-Setup-${{ needs.version.outputs.version }}.exe"
           sha256sum "$FILE" | awk '{print $1}' > "$FILE.sha256"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: installer
+          name: windows-installer
           path: dist/*
 
-      - name: Create GitHub release
-        if: github.event_name == 'push'
+  build-linux:
+    name: Build the Linux binary
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      # Mismo ID incluido que en Windows (ver el comentario del job de arriba):
+      # sin bandeja de sistema en Linux (ver app/Cargo.toml), así que este build
+      # no necesita GTK/pkg-config, sólo el toolchain de Rust normal.
+      - name: Build the application
+        env:
+          FACTORIO_DRP_DEFAULT_APP_ID: ${{ vars.DISCORD_APPLICATION_ID }}
+        run: cargo build --release
+
+      - name: Package the binary
+        id: package
         shell: bash
+        run: |
+          NAME="factorio-discord-rp-linux-x86_64-${{ needs.version.outputs.version }}"
+          mkdir -p "dist/$NAME"
+          cp target/release/factorio-discord-rp "dist/$NAME/"
+          cp app/config.example.toml "dist/$NAME/"
+          cp README.md "dist/$NAME/"
+          tar -C dist -czf "dist/$NAME.tar.gz" "$NAME"
+          rm -rf "dist/$NAME"
+          sha256sum "dist/$NAME.tar.gz" | awk '{print $1}' > "dist/$NAME.tar.gz.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-binary
+          path: dist/*
+
+  release:
+    name: Publish GitHub release
+    if: github.event_name == 'push'
+    needs: [version, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: dist
+
+      - name: Download the Linux binary
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-binary
+          path: dist
+
+      - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            "${{ steps.hash.outputs.file }}" \
-            "${{ steps.hash.outputs.file }}.sha256" \
-            --title "App v${{ steps.version.outputs.version }}" \
+            --repo "${{ github.repository }}" \
+            dist/* \
+            --title "App v${{ needs.version.outputs.version }}" \
             --generate-notes

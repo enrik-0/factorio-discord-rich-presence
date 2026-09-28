@@ -9,9 +9,33 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  app:
-    name: App (Rust)
+  app-windows:
+    name: App (Rust, Windows)
     runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --all
+
+  # Compila y prueba de verdad en Linux (no sólo `cargo check` cruzado): el
+  # icono de bandeja es de Windows (ver app/Cargo.toml), así que este runner
+  # no necesita GTK ni pkg-config, sólo el toolchain de Rust normal.
+  app-linux:
+    name: App (Rust, Linux)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 

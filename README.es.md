@@ -16,12 +16,13 @@ rompería el determinismo en multijugador. Así que:
 
 ## Requisitos
 
-- Windows, y Factorio **2.1** (el mod declara `factorio_version: "2.1"`; Factorio no
-  tiene compatibilidad hacia delante, así que no carga en 2.0)
-- Si juegas a Factorio desde Steam, no hace falta nada más: el instalador lo detecta
-  solo.
+- Windows o Linux, y Factorio **2.1** (el mod declara `factorio_version: "2.1"`;
+  Factorio no tiene compatibilidad hacia delante, así que no carga en 2.0)
+- En Windows, si juegas a Factorio desde Steam, no hace falta nada más: el instalador
+  lo detecta solo. El soporte en Linux es más nuevo y manual — ver
+  [Instalación (Linux)](#instalación-linux) más abajo.
 
-## Instalación
+## Instalación (Windows)
 
 1. Descarga el instalador (`FactorioDiscordRP-Setup-*.exe`) desde
    [Releases](https://github.com/enrik-0/factorio-discord-rich-presence/releases) y
@@ -45,6 +46,35 @@ puesto en las opciones de lanzamiento de Steam, sin tocar el resto de tus opcion
 
 Dentro del juego, `/drp-debug` imprime los datos que está publicando el mod, para
 contrastarlos con el árbol de tecnologías.
+
+## Instalación (Linux)
+
+El soporte en Linux es más nuevo y manual que en Windows: no hay instalador, ni
+configuración automática de Steam, ni icono en la bandeja del sistema todavía — la
+aplicación simplemente corre en segundo plano y deja el registro en un fichero.
+
+1. Descarga `factorio-discord-rp-linux-x86_64-*.tar.gz` desde
+   [Releases](https://github.com/enrik-0/factorio-discord-rich-presence/releases) y
+   descomprímelo en un sitio permanente. Asegúrate de que el binario tiene permiso de
+   ejecución (`chmod +x factorio-discord-rp`).
+2. En Steam → Factorio → Propiedades → Opciones de lanzamiento, añade:
+   ```
+   "/ruta/a/factorio-discord-rp" %command%
+   ```
+   (con la ruta real de donde lo hayas descomprimido). La aplicación arranca Factorio,
+   publica mientras siga abierto y se cierra sola poco después de que lo cierres.
+3. Instala el mod «Discord Rich Presence», igual que arriba — desde el
+   [Mod Portal](https://mods.factorio.com/mod/discord-rich-presence) o desde el propio
+   juego.
+4. Juega. Comprueba la tarjeta **desde otra cuenta de Discord**.
+
+No hace falta configurar ningún Application ID para el uso normal, igual que en
+Windows. Para dejar de usarla, basta con quitar esa línea de las opciones de
+lanzamiento y borrar el binario — no queda nada más instalado en ningún sitio.
+
+`factorio-discord-rp --check` desde una terminal informa de lo que encuentra (rutas,
+Application ID) sin tocar Discord; el registro queda en
+`~/.local/share/factorio-discord-rp/factorio-discord-rp.log`.
 
 ## Ajustes del mod
 
