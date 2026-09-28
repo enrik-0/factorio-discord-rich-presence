@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Versión a compilar (X.Y.Z); en vacío usa la del workspace"
+        description: "Version to build (X.Y.Z); leave empty to use the workspace version"
         required: false
 
 permissions:
@@ -16,12 +16,12 @@ permissions:
 
 jobs:
   build:
-    name: Compilar el instalador
+    name: Build the installer
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Resolver versión
+      - name: Resolve version
         id: version
         shell: bash
         run: |
@@ -33,7 +33,7 @@ jobs:
           else
             VERSION="${GITHUB_REF_NAME#app-v}"
             if [[ "$VERSION" != "$WORKSPACE_VERSION" ]]; then
-              echo "::error::El tag ${GITHUB_REF_NAME} no coincide con la versión del workspace ($WORKSPACE_VERSION)"
+              echo "::error::Tag ${GITHUB_REF_NAME} does not match the workspace version ($WORKSPACE_VERSION)"
               exit 1
             fi
           fi
@@ -46,20 +46,20 @@ jobs:
       # Sin este ID, config.toml sigue siendo obligatorio para cualquiera que
       # instale la aplicación. Es un dato público (no un secreto), guardado como
       # variable del repositorio para no dejarlo en el código fuente.
-      - name: Compilar la aplicación
+      - name: Build the application
         env:
           FACTORIO_DRP_DEFAULT_APP_ID: ${{ vars.DISCORD_APPLICATION_ID }}
         run: cargo build --release
 
-      - name: Instalar Inno Setup
+      - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
 
-      - name: Compilar el instalador
+      - name: Build the installer
         shell: cmd
         run: |
           "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=${{ steps.version.outputs.version }} installer\factorio-discord-rp.iss
 
-      - name: Calcular el SHA-256
+      - name: Compute the SHA-256
         id: hash
         shell: bash
         run: |
@@ -72,7 +72,7 @@ jobs:
           name: installer
           path: dist/*
 
-      - name: Crear release en GitHub
+      - name: Create GitHub release
         if: github.event_name == 'push'
         shell: bash
         env:
@@ -81,5 +81,5 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             "${{ steps.hash.outputs.file }}" \
             "${{ steps.hash.outputs.file }}.sha256" \
-            --title "Aplicación app-v${{ steps.version.outputs.version }}" \
+            --title "App v${{ steps.version.outputs.version }}" \
             --generate-notes

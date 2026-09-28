@@ -21,7 +21,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Formato
+      - name: Format
         run: cargo fmt --all --check
 
       - name: Clippy
@@ -36,13 +36,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Instalar Lua y luacheck
+      - name: Install Lua and luacheck
         run: |
           sudo apt-get update
           sudo apt-get install -y lua5.4 luarocks
           sudo luarocks install luacheck
 
-      - name: Sintaxis Lua
+      - name: Lua syntax
         run: |
           for file in mod/*.lua; do
             luac5.4 -p "$file"
@@ -53,7 +53,7 @@ jobs:
 
       # Valida info.json, comprueba que el changelog cubre la versión y produce
       # el zip con la estructura exacta que exige el Mod Portal.
-      - name: Empaquetar
+      - name: Package
         run: python3 scripts/package_mod.py
 
       - uses: actions/upload-artifact@v4
