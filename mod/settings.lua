@@ -1,12 +1,12 @@
--- El periodo de escritura es global: `on_nth_tick` es único para toda la partida,
--- así que no puede variar por jugador.
+-- The write period is global: `on_nth_tick` is a single timer for the whole
+-- save, so it can't vary per player.
 --
--- Todo lo demás es por jugador y decide **qué se ve en la tarjeta de Discord**.
--- El fichero de estado nunca sale del equipo, así que elegir qué se muestra es
--- también el control de privacidad: lo único que ve otra gente es la tarjeta.
+-- Everything else is per player and decides **what shows up on the Discord
+-- card**. The state file never leaves the machine, so choosing what's shown
+-- is also the privacy control: the card is the only thing anyone else sees.
 --
--- El hueco de cada campo es fijo y se indica en su descripción, para que ninguna
--- casilla pueda activarse sin que aparezca nada.
+-- Each field's slot is fixed and noted in its description, so no toggle can
+-- be turned on without anything actually appearing.
 
 local function toggle(name, order, default)
   return {
@@ -30,15 +30,15 @@ data:extend({
   },
   toggle("drp-enabled", "ab", true),
 
-  -- Línea 1: identidad de la partida.
+  -- Line 1: game identity.
   toggle("drp-show-save", "ba", true),
   toggle("drp-show-planet", "bb", true),
   toggle("drp-show-overhaul", "bc", false),
 
-  -- Línea 2: qué estás haciendo.
+  -- Line 2: what you're doing.
   toggle("drp-show-research", "ca", true),
 
-  -- Tooltip: contadores.
+  -- Tooltip: counters.
   toggle("drp-show-tech-count", "da", true),
   toggle("drp-show-evolution", "db", false),
   toggle("drp-show-rockets", "dc", true),

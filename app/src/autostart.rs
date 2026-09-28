@@ -1,18 +1,18 @@
-//! Arranque automático con la sesión de Windows.
+//! Automatic startup with the Windows session.
 //!
-//! Se registra en `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`: por
-//! usuario, sin permisos de administrador, y visible en el Administrador de
-//! tareas, de modo que se puede desactivar desde ahí aunque la aplicación
-//! desaparezca.
+//! Registered under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`:
+//! per-user, no administrator permissions needed, and visible in Task
+//! Manager, so it can be disabled from there even if the application
+//! disappears.
 //!
-//! Siempre desactivado de fábrica: meter algo en el arranque del sistema es
-//! decisión del usuario, no del programa.
+//! Always disabled by default: adding something to system startup is the
+//! user's decision, not the program's.
 
 use anyhow::{Context, Result};
 use auto_launch::AutoLaunchBuilder;
 use tracing::info;
 
-/// Nombre de la entrada en el registro, tal y como se ve en el sistema.
+/// Name of the registry entry, as it appears in the system.
 const APP_NAME: &str = "Factorio Discord Rich Presence";
 
 fn launcher() -> Result<auto_launch::AutoLaunch> {
@@ -22,30 +22,26 @@ fn launcher() -> Result<auto_launch::AutoLaunch> {
     AutoLaunchBuilder::new()
         .set_app_name(APP_NAME)
         .set_app_path(&exe)
-        // Sin esto, al arrancar desde el registro se abriría en modo consola.
+        // Without this, starting from the registry would open in console mode.
         .set_args(&["--tray"])
         .build()
-        .context("no se pudo preparar el registro de autoarranque")
+        .context("could not prepare the autostart registry entry")
 }
 
 pub fn is_enabled() -> bool {
     launcher()
-        .and_then(|l| l.is_enabled().context("consulta de autoarranque"))
+        .and_then(|l| l.is_enabled().context("autostart query"))
         .unwrap_or(false)
 }
 
 pub fn set_enabled(enabled: bool) -> Result<()> {
     let launcher = launcher()?;
     if enabled {
-        launcher
-            .enable()
-            .context("no se pudo activar el autoarranque")?;
-        info!("autoarranque activado");
+        launcher.enable().context("could not enable autostart")?;
+        info!("autostart enabled");
     } else {
-        launcher
-            .disable()
-            .context("no se pudo desactivar el autoarranque")?;
-        info!("autoarranque desactivado");
+        launcher.disable().context("could not disable autostart")?;
+        info!("autostart disabled");
     }
     Ok(())
 }

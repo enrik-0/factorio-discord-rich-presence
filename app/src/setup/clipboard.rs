@@ -1,8 +1,8 @@
-//! Copiar texto al portapapeles de Windows.
+//! Copying text to the Windows clipboard.
 //!
-//! Se usa la API directamente, en UTF-16, en vez de `clip.exe`: éste lee la
-//! entrada en la página de códigos de la consola y estropea acentos y eñes de
-//! rutas como `C:\Users\Ñandú\…`.
+//! The API is used directly, in UTF-16, instead of `clip.exe`: the latter
+//! reads input in the console's code page and mangles accented characters
+//! and ñ's in paths like `C:\Users\Ñandú\…`.
 
 use std::time::Duration;
 
@@ -13,10 +13,10 @@ use windows_sys::Win32::System::DataExchange::{
 };
 use windows_sys::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
 
-/// Formato de texto Unicode del portapapeles.
+/// Clipboard Unicode text format.
 const CF_UNICODETEXT: u32 = 13;
 
-/// Otro programa puede tener el portapapeles abierto un instante.
+/// Another program may have the clipboard open for a moment.
 const OPEN_ATTEMPTS: u32 = 10;
 
 pub fn copy(text: &str) -> Result<()> {
@@ -26,13 +26,13 @@ pub fn copy(text: &str) -> Result<()> {
     unsafe {
         let handle = GlobalAlloc(GMEM_MOVEABLE, bytes);
         if handle.is_null() {
-            bail!("no se pudo reservar memoria para el portapapeles");
+            bail!("could not allocate memory for the clipboard");
         }
 
         let dest = GlobalLock(handle).cast::<u16>();
         if dest.is_null() {
             GlobalFree(handle);
-            bail!("no se pudo bloquear la memoria del portapapeles");
+            bail!("could not lock the clipboard memory");
         }
         std::ptr::copy_nonoverlapping(wide.as_ptr(), dest, wide.len());
         GlobalUnlock(handle);
@@ -47,7 +47,7 @@ pub fn copy(text: &str) -> Result<()> {
         }
         if !opened {
             GlobalFree(handle);
-            bail!("el portapapeles está ocupado por otro programa");
+            bail!("the clipboard is busy with another program");
         }
 
         EmptyClipboard();
@@ -55,11 +55,11 @@ pub fn copy(text: &str) -> Result<()> {
         CloseClipboard();
 
         if accepted.is_null() {
-            // Si el portapapeles lo rechaza, la memoria sigue siendo nuestra.
+            // If the clipboard rejects it, the memory is still ours.
             GlobalFree(handle);
-            bail!("el portapapeles rechazó el texto");
+            bail!("the clipboard rejected the text");
         }
-        // Aceptado: la memoria pasa a ser suya y no se libera aquí.
+        // Accepted: the memory now belongs to it and isn't freed here.
     }
 
     Ok(())

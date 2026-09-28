@@ -1,4 +1,4 @@
-//! Fuentes de estado. Ninguna es obligatoria: la fusión usa lo que haya.
+//! State sources. None is mandatory: the merge uses whatever is available.
 
 pub mod logfile;
 pub mod modfile;

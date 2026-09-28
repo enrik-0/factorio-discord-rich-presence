@@ -1,11 +1,10 @@
-//! Discord Rich Presence para Factorio 2.1.
+//! Discord Rich Presence for Factorio 2.1.
 //!
-//! El mod de Factorio escribe el estado de la partida en `script-output`; esta
-//! aplicación lo lee, lo completa con el registro del juego y lo publica en
-//! Discord.
+//! The Factorio mod writes the game state to `script-output`; this app
+//! reads it, fills it in with the game's log, and publishes it to Discord.
 //!
-//! Sin argumentos arranca en la bandeja del sistema, que es el uso normal. Los
-//! modos de línea de órdenes existen para diagnosticar.
+//! With no arguments it starts in the system tray, which is normal use. The
+//! command-line modes exist for diagnostics.
 
 mod autostart;
 mod config;
@@ -36,50 +35,50 @@ use crate::presence::{ActivitySpec, DiscordSink};
 use crate::status::Shared;
 
 const HELP: &str = "\
-Discord Rich Presence para Factorio 2.1
+Discord Rich Presence for Factorio 2.1
 
-USO:
-    factorio-discord-rp [OPCIONES]
-    factorio-discord-rp [OPCIONES] <factorio.exe> [ARGUMENTOS DEL JUEGO...]
+USAGE:
+    factorio-discord-rp [OPTIONS]
+    factorio-discord-rp [OPTIONS] <factorio.exe> [GAME ARGUMENTS...]
 
-Sin opciones arranca en la bandeja del sistema.
+With no options it starts in the system tray.
 
-Con la ruta del juego actúa de lanzador: arranca Factorio, publica mientras siga
-abierto y se cierra con él. Todo lo que sigue a la ruta es del juego. En Steam,
-en las opciones de lanzamiento de Factorio:
-    \"C:\\ruta\\factorio-discord-rp.exe\" %command%
+With the game's path it acts as a launcher: it starts Factorio, publishes
+while it stays open, and closes with it. Everything after the path belongs
+to the game. In Steam, in Factorio's launch options:
+    \"C:\\path\\factorio-discord-rp.exe\" %command%
 
-OPCIONES:
-    --tray             Fuerza el modo bandeja (es lo que usa el autoarranque)
-    --console          Vigila desde la consola, sin icono de bandeja
-    --check            Comprueba configuración y rutas, sin conectar con Discord
-    --dump             Muestra lo que ven las fuentes y qué se publicaría
-    --selftest         Publica una actividad de prueba fija y la mantiene
-    --config <RUTA>    Fichero de configuración concreto
-    -h, --help         Muestra esta ayuda
+OPTIONS:
+    --tray             Force tray mode (what autostart uses)
+    --console          Watch from the console, no tray icon
+    --check            Check configuration and paths, without connecting to Discord
+    --dump             Show what the sources see and what would be published
+    --selftest         Publish a fixed test activity and keep it up
+    --config <PATH>    A specific configuration file
+    -h, --help         Show this help
 
-CONFIGURACIÓN DE STEAM (la usa el instalador, también sirve a mano):
-    --setup            Detecta Steam y muestra la línea completa para las opciones
-                       de lanzamiento de Factorio, copiada al portapapeles
-    --apply            Pone la aplicación en esas opciones, con copia de seguridad
-    --uninstall        La quita de ellas, dejando el resto
-    --dry-run          Con lo anterior: enseña qué cambiaría, sin escribir nada
-    --close-steam      Cierra Steam si está abierto (hay que cerrarlo para cambiar
-                       su configuración)
-    --restart-steam    Lo reabre después, si lo ha cerrado la aplicación
-    --print-command    Imprime sólo la línea de lanzamiento
-    --copy-command     Copia la línea de lanzamiento al portapapeles
-    --autostart on|off Activa o desactiva el arranque con Windows
+STEAM SETUP (used by the installer, also usable by hand):
+    --setup            Detects Steam and shows the full line for Factorio's
+                       launch options, copied to the clipboard
+    --apply            Puts the app into those options, with a backup
+    --uninstall        Removes it from them, leaving the rest
+    --dry-run          With the above: shows what would change, without writing anything
+    --close-steam      Closes Steam if it's open (it has to be closed to change
+                       its configuration)
+    --restart-steam    Reopens it afterwards, if the app closed it
+    --print-command    Prints just the launch line
+    --copy-command     Copies the launch line to the clipboard
+    --autostart on|off Turns starting with Windows on or off
 
-Códigos de salida de --apply y --uninstall: 0 hecho, 10 Steam abierto, 11 no se
-encuentra Steam o Factorio, 12 no se pudo leer o escribir la configuración.
+Exit codes for --apply and --uninstall: 0 done, 10 Steam is open, 11 Steam or
+Factorio not found, 12 could not read or write the configuration.
 ";
 
-/// El juego que hay que lanzar, tal y como lo entrega Steam con `%command%`.
+/// The game to launch, exactly as Steam hands it over via `%command%`.
 #[derive(Debug, PartialEq, Eq)]
 struct GameCommand {
     exe: PathBuf,
-    /// Argumentos del juego, sin interpretar: no son opciones de esta aplicación.
+    /// The game's arguments, uninterpreted: they aren't this app's own options.
     args: Vec<OsString>,
 }
 
@@ -92,9 +91,9 @@ enum Mode {
     Dump,
     Selftest,
     Help,
-    /// Arranca el juego y se queda mientras siga abierto.
+    /// Starts the game and stays around while it's open.
     Launch(GameCommand),
-    /// Informe de Steam y línea para pegar (con `--dry-run`, qué cambiaría).
+    /// Steam report and the line to paste (with `--dry-run`, what would change).
     Setup,
     Apply,
     Uninstall,
@@ -107,7 +106,7 @@ enum Mode {
 struct Args {
     mode: Mode,
     config: Option<PathBuf>,
-    // Modificadores de la configuración de Steam: valen en cualquier orden.
+    // Steam-configuration modifiers: valid in any order.
     close_steam: bool,
     restart_steam: bool,
     dry_run: bool,
@@ -117,18 +116,18 @@ fn parse_args() -> Result<Args> {
     parse(std::env::args_os().skip(1))
 }
 
-/// Recibe `OsString` y no `String`: la ruta del juego y sus argumentos pueden
-/// no ser Unicode válido, y no hay motivo para fallar por eso.
+/// Takes `OsString`, not `String`: the game's path and its arguments may not
+/// be valid Unicode, and there's no reason to fail over that.
 fn parse(raw: impl IntoIterator<Item = OsString>) -> Result<Args> {
     let mut args = Args::default();
     let mut raw = raw.into_iter();
 
     while let Some(arg) = raw.next() {
         let Some(text) = arg.to_str().filter(|text| text.starts_with('-')) else {
-            // El primer argumento que no es una opción nuestra es el juego; todo
-            // lo que le sigue es suyo, incluidas las cosas que empiezan por `-`.
+            // The first argument that isn't one of our options is the game;
+            // everything after it belongs to it, including things starting with `-`.
             if args.mode != Mode::Tray {
-                bail!("la ruta del juego no se puede combinar con otras opciones\n\n{HELP}");
+                bail!("the game's path cannot be combined with other options\n\n{HELP}");
             }
             args.mode = Mode::Launch(GameCommand {
                 exe: PathBuf::from(arg),
@@ -144,8 +143,8 @@ fn parse(raw: impl IntoIterator<Item = OsString>) -> Result<Args> {
             "--dump" => Mode::Dump,
             "--selftest" => Mode::Selftest,
             "-h" | "--help" => Mode::Help,
-            // `--setup` es el modo por omisión de la configuración de Steam y no
-            // debe pisar a `--apply` o `--uninstall`, vengan antes o después.
+            // `--setup` is the Steam configuration's default mode and must not
+            // override `--apply` or `--uninstall`, whether they come before or after.
             "--setup" => {
                 if args.mode == Mode::Tray {
                     args.mode = Mode::Setup;
@@ -171,16 +170,16 @@ fn parse(raw: impl IntoIterator<Item = OsString>) -> Result<Args> {
             "--autostart" => match raw.next().and_then(|value| value.into_string().ok()) {
                 Some(value) if value == "on" => Mode::Autostart(true),
                 Some(value) if value == "off" => Mode::Autostart(false),
-                _ => bail!("--autostart necesita `on` u `off`"),
+                _ => bail!("--autostart needs `on` or `off`"),
             },
             "--config" => {
                 let value = raw
                     .next()
-                    .ok_or_else(|| anyhow::anyhow!("--config necesita una ruta"))?;
+                    .ok_or_else(|| anyhow::anyhow!("--config needs a path"))?;
                 args.config = Some(PathBuf::from(value));
                 continue;
             }
-            other => bail!("opción desconocida: {other}\n\n{HELP}"),
+            other => bail!("unknown option: {other}\n\n{HELP}"),
         };
     }
 
@@ -195,9 +194,9 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    // La configuración de Steam imprime su resultado y termina con un código de
-    // salida que el instalador interpreta. Sin registro: cualquier línea de más
-    // en la salida estropearía `--print-command`.
+    // The Steam configuration prints its result and exits with a code the
+    // installer interprets. No logging: any extra line in the output would
+    // break `--print-command`.
     if matches!(
         args.mode,
         Mode::Setup
@@ -210,16 +209,16 @@ fn main() -> Result<()> {
         return run_setup(&args);
     }
 
-    // En la bandeja no hay consola donde mirar: el registro va a fichero. El
-    // lanzador también vive en la bandeja, y además lo arranca Steam sin consola.
+    // In the tray there's no console to look at: logging goes to a file. The
+    // launcher also lives in the tray, and besides, Steam starts it with no console.
     let log_path = if matches!(args.mode, Mode::Tray | Mode::Launch(_)) {
         hide_console();
         match logging::init_file() {
             Ok(path) => Some(path),
             Err(err) => {
-                // Sin registro se puede seguir; peor sería no arrancar.
+                // It can carry on without logging; not starting at all would be worse.
                 logging::init_console();
-                warn!(%err, "no se pudo abrir el registro en fichero");
+                warn!(%err, "could not open the log file");
                 None
             }
         }
@@ -228,8 +227,8 @@ fn main() -> Result<()> {
         None
     };
 
-    // El lanzador va antes de leer la configuración: si esta falla, Factorio tiene
-    // que arrancar igualmente. Sin presencia, pero arrancar.
+    // The launcher runs before reading the configuration: if that fails,
+    // Factorio still has to start. Without presence, but it starts.
     if let Mode::Launch(game) = args.mode {
         return launch(args.config.as_deref(), log_path, game);
     }
@@ -244,7 +243,7 @@ fn main() -> Result<()> {
         | Mode::Uninstall
         | Mode::PrintCommand
         | Mode::CopyCommand
-        | Mode::Autostart(_) => unreachable!("atendidos antes"),
+        | Mode::Autostart(_) => unreachable!("handled earlier"),
         Mode::Check => run_check(&config),
         Mode::Dump => run::dump(&config),
         Mode::Selftest => run_selftest(&config),
@@ -256,8 +255,8 @@ fn main() -> Result<()> {
     }
 }
 
-/// Modos de configuración de Steam: hacen su trabajo, imprimen y salen con el
-/// código que corresponde (0, 10, 11, 12 o 1; ver `setup::Failure`).
+/// Steam-configuration modes: they do their job, print, and exit with the
+/// matching code (0, 10, 11, 12, or 1; see `setup::Failure`).
 fn run_setup(args: &Args) -> Result<()> {
     use setup::Action;
 
@@ -276,7 +275,7 @@ fn run_setup(args: &Args) -> Result<()> {
         Mode::PrintCommand => setup::print_command(),
         Mode::CopyCommand => setup::copy_command(),
         Mode::Autostart(on) => setup::set_autostart(*on),
-        _ => unreachable!("sólo se llama con los modos de configuración"),
+        _ => unreachable!("only called with the configuration modes"),
     };
 
     if let Err(failure) = outcome {
@@ -286,36 +285,37 @@ fn run_setup(args: &Args) -> Result<()> {
     Ok(())
 }
 
-/// Bandeja residente, por ejemplo la del autoarranque. Una sola por sesión.
+/// Resident tray, e.g. the one from autostart. Only one per session.
 fn run_resident(config: Config, log_path: Option<PathBuf>) -> Result<()> {
     let Some(_guard) = instance::acquire() else {
-        info!("ya hay otra copia de la aplicación en marcha; no se abre otra");
+        info!("another copy of the app is already running; not opening a second one");
         return Ok(());
     };
     tray::run(config, log_path, false)
 }
 
-/// Modo lanzador: arranca Factorio y se queda mientras siga abierto.
+/// Launcher mode: starts Factorio and stays around while it's open.
 ///
-/// Si ya hay una copia residente (autoarranque) es ella la que publica, y aquí
-/// sólo se lanza el juego: dos copias pisarían la misma tarjeta de Discord.
+/// If a resident copy (autostart) is already running, it's the one
+/// publishing, and here only the game gets launched: two copies would
+/// stomp on the same Discord card.
 fn launch(config_path: Option<&Path>, log_path: Option<PathBuf>, game: GameCommand) -> Result<()> {
     let guard = instance::acquire();
 
     if let Err(err) = spawn_game(&game) {
-        error!("no se pudo lanzar el juego: {err:#}");
+        error!("could not launch the game: {err:#}");
         return Err(err);
     }
 
     let Some(_guard) = guard else {
-        info!("ya hay otra copia en marcha: ella se encarga de la presencia");
+        info!("another copy is already running: it's handling the presence");
         return Ok(());
     };
 
     let config = match Config::load(config_path) {
         Ok(config) => config,
         Err(err) => {
-            error!("configuración inválida; Factorio arranca sin presencia: {err:#}");
+            error!("invalid configuration; Factorio starts without presence: {err:#}");
             return Ok(());
         }
     };
@@ -323,97 +323,94 @@ fn launch(config_path: Option<&Path>, log_path: Option<PathBuf>, game: GameComma
     tray::run(config, log_path, true)
 }
 
-/// Arranca el juego sin esperarlo. Soltar el `Child` no lo detiene.
+/// Starts the game without waiting for it. Dropping the `Child` doesn't stop it.
 ///
-/// No se fija el directorio de trabajo: es el que Steam ha preparado para esta
-/// aplicación y el juego debe heredarlo igual que si lo hubiera lanzado Steam.
+/// The working directory isn't set: it's whatever Steam has prepared for
+/// this app, and the game must inherit it just as if Steam had launched it.
 ///
-/// Entrada y salida van a `NUL`. Antes de llegar aquí se ha soltado la consola
-/// (`FreeConsole`), y sin ella no hay manejadores estándar que heredar: `spawn`
-/// falla con "controlador no válido" (error 6) y Factorio no llegaría a abrirse.
+/// Stdin/stdout/stderr go to `NUL`. By the time we get here the console has
+/// already been released (`FreeConsole`), and without it there are no
+/// standard handles to inherit: `spawn` fails with "invalid handle" (error
+/// 6) and Factorio would never open.
 fn spawn_game(game: &GameCommand) -> Result<()> {
     use std::process::Stdio;
 
-    info!(juego = %game.exe.display(), argumentos = game.args.len(), "lanzando Factorio");
+    info!(game = %game.exe.display(), arguments = game.args.len(), "launching Factorio");
     std::process::Command::new(&game.exe)
         .args(&game.args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .with_context(|| format!("no se pudo lanzar {}", game.exe.display()))?;
+        .with_context(|| format!("could not launch {}", game.exe.display()))?;
     Ok(())
 }
 
-/// Oculta la ventana de consola en modo bandeja.
+/// Hides the console window in tray mode.
 ///
-/// El ejecutable se compila como aplicación de consola para que `--check` y
-/// `--dump` funcionen con normalidad desde una terminal. La contrapartida es que
-/// al arrancar con Windows aparece una consola, que se cierra aquí. Si el
-/// proceso viene de una terminal, esto sólo lo desengancha de ella.
+/// The executable is built as a console application so `--check` and
+/// `--dump` work normally from a terminal. The trade-off is that a console
+/// appears when starting with Windows, which gets closed here. If the
+/// process came from a terminal, this only detaches it from that terminal.
 fn hide_console() {
     unsafe {
         windows_sys::Win32::System::Console::FreeConsole();
     }
 }
 
-/// Comprueba lo que se puede comprobar sin depender de Discord ni de Factorio.
+/// Checks what can be checked without depending on Discord or Factorio.
 fn run_check(config: &Config) -> Result<()> {
     match config.application_id() {
-        Ok(id) => println!("Application ID     ok ({} dígitos)", id.len()),
-        Err(err) => println!("Application ID     FALTA\n  {err}"),
+        Ok(id) => println!("Application ID     ok ({} digits)", id.len()),
+        Err(err) => println!("Application ID     MISSING\n  {err}"),
     }
 
     match config.factorio_data_dir() {
         Ok(dir) => {
-            println!("Datos de Factorio  {}", dir.display());
+            println!("Factorio data      {}", dir.display());
             let log = dir.join("factorio-current.log");
             println!(
                 "  factorio-current.log  {}",
-                if log.is_file() {
-                    "encontrado"
-                } else {
-                    "ausente"
-                }
+                if log.is_file() { "found" } else { "missing" }
             );
             let script_output = dir.join("script-output");
             println!(
                 "  script-output         {}",
                 if script_output.is_dir() {
-                    "encontrado"
+                    "found"
                 } else {
-                    "ausente (se creará al activar el mod)"
+                    "missing (will be created once the mod is enabled)"
                 }
             );
         }
-        Err(err) => println!("Datos de Factorio  NO ENCONTRADOS\n  {err}"),
+        Err(err) => println!("Factorio data      NOT FOUND\n  {err}"),
     }
 
     match paths::app_dir() {
-        Ok(dir) => println!("Datos de la app    {}", dir.display()),
-        Err(err) => println!("Datos de la app    NO DISPONIBLES\n  {err}"),
+        Ok(dir) => println!("App data           {}", dir.display()),
+        Err(err) => println!("App data           NOT AVAILABLE\n  {err}"),
     }
     println!(
-        "Autoarranque       {}",
+        "Autostart          {}",
         if autostart::is_enabled() {
-            "activado"
+            "enabled"
         } else {
-            "desactivado"
+            "disabled"
         }
     );
 
     Ok(())
 }
 
-/// Publica una actividad fija y la mantiene viva.
+/// Publishes a fixed activity and keeps it alive.
 ///
-/// Valida el camino completo Application ID → tubería con nombre → tarjeta
-/// visible en el perfil, incluyendo la reconexión si se cierra y reabre Discord.
+/// Validates the full path from Application ID → named pipe → visible card
+/// on the profile, including reconnecting if Discord closes and reopens.
 fn run_selftest(config: &Config) -> Result<()> {
     let application_id = config.application_id()?;
     let mut sink = DiscordSink::new(application_id)?;
 
-    // Un save ficticio con 4 h 12 min de juego, para comprobar el cronómetro.
+    // A fake save with 4 h 12 min of playtime, to check the timer.
     let playtime_secs = 4 * 3600 + 12 * 60;
     let spec = ActivitySpec {
         details: Some("Fulgora · Rocket Co.".into()),
@@ -426,18 +423,18 @@ fn run_selftest(config: &Config) -> Result<()> {
         party: None,
     };
 
-    info!("publicando actividad de prueba; Ctrl+C para salir");
-    info!("compruébalo desde OTRA cuenta de Discord: el propio perfil no muestra todo");
+    info!("publishing test activity; Ctrl+C to quit");
+    info!("check it from ANOTHER Discord account: your own profile doesn't show everything");
 
     let mut announced = false;
     loop {
         if sink.publish(&spec) {
             if !announced {
-                info!("actividad enviada — debería verse ya en tu perfil");
+                info!("activity sent — it should already show on your profile");
                 announced = true;
             }
         } else if !sink.is_connected() && !announced {
-            warn!("esperando a que Discord esté disponible…");
+            warn!("waiting for Discord to become available…");
         }
         std::thread::sleep(Duration::from_secs(2));
     }
@@ -459,14 +456,14 @@ mod tests {
     }
 
     #[test]
-    fn sin_argumentos_arranca_la_bandeja() {
+    fn no_arguments_starts_the_tray() {
         let args = parse_strs(&[]).unwrap();
         assert_eq!(args.mode, Mode::Tray);
         assert_eq!(args.config, None);
     }
 
     #[test]
-    fn las_opciones_de_diagnostico_siguen_funcionando() {
+    fn the_diagnostic_options_still_work() {
         assert_eq!(parse_strs(&["--console"]).unwrap().mode, Mode::Console);
         assert_eq!(parse_strs(&["--check"]).unwrap().mode, Mode::Check);
         assert_eq!(parse_strs(&["--dump"]).unwrap().mode, Mode::Dump);
@@ -475,7 +472,7 @@ mod tests {
     }
 
     #[test]
-    fn la_ruta_del_juego_activa_el_modo_lanzador() {
+    fn the_games_path_triggers_launcher_mode() {
         let args = parse_strs(&[r"D:\SteamLibrary\Factorio\bin\x64\factorio.exe"]).unwrap();
         assert_eq!(
             args.mode,
@@ -484,15 +481,15 @@ mod tests {
     }
 
     #[test]
-    fn los_argumentos_del_juego_pasan_intactos() {
-        // Incluye opciones que empiezan por `-` y rutas con espacios: nada de eso
-        // es de esta aplicación.
+    fn the_games_arguments_pass_through_untouched() {
+        // Includes options starting with `-` and paths with spaces: none of
+        // that belongs to this app.
         let args = parse_strs(&[
-            r"C:\Juegos\Factorio\factorio.exe",
+            r"C:\Games\Factorio\factorio.exe",
             "--mod-directory",
-            r"D:\mis mods",
+            r"D:\my mods",
             "--load-game",
-            "partida.zip",
+            "save.zip",
             "--check",
         ])
         .unwrap();
@@ -500,12 +497,12 @@ mod tests {
         assert_eq!(
             args.mode,
             game(
-                r"C:\Juegos\Factorio\factorio.exe",
+                r"C:\Games\Factorio\factorio.exe",
                 &[
                     "--mod-directory",
-                    r"D:\mis mods",
+                    r"D:\my mods",
                     "--load-game",
-                    "partida.zip",
+                    "save.zip",
                     "--check"
                 ]
             )
@@ -513,7 +510,7 @@ mod tests {
     }
 
     #[test]
-    fn las_opciones_propias_van_antes_del_juego() {
+    fn our_own_options_go_before_the_game() {
         let args =
             parse_strs(&["--config", r"C:\c.toml", "factorio.exe", "--config", "x"]).unwrap();
         assert_eq!(args.config, Some(PathBuf::from(r"C:\c.toml")));
@@ -521,30 +518,30 @@ mod tests {
     }
 
     #[test]
-    fn tray_explicito_tambien_admite_juego() {
-        // El autoarranque pasa `--tray`; combinarlo con un juego no debe fallar.
+    fn explicit_tray_also_accepts_a_game() {
+        // Autostart passes `--tray`; combining it with a game must not fail.
         let args = parse_strs(&["--tray", "factorio.exe"]).unwrap();
         assert_eq!(args.mode, game("factorio.exe", &[]));
     }
 
     #[test]
-    fn el_juego_no_se_mezcla_con_los_modos_de_diagnostico() {
+    fn the_game_does_not_mix_with_diagnostic_modes() {
         assert!(parse_strs(&["--check", "factorio.exe"]).is_err());
         assert!(parse_strs(&["--console", "factorio.exe"]).is_err());
     }
 
     #[test]
-    fn una_opcion_propia_desconocida_es_un_error() {
+    fn an_unknown_option_is_an_error() {
         assert!(parse_strs(&["--nada"]).is_err());
     }
 
     #[test]
-    fn config_sin_ruta_es_un_error() {
+    fn config_without_a_path_is_an_error() {
         assert!(parse_strs(&["--config"]).is_err());
     }
 
     #[test]
-    fn las_opciones_de_steam_valen_en_cualquier_orden() {
+    fn the_steam_options_work_in_any_order() {
         let a = parse_strs(&["--setup", "--apply", "--close-steam", "--restart-steam"]).unwrap();
         let b = parse_strs(&["--restart-steam", "--close-steam", "--apply", "--setup"]).unwrap();
         for args in [a, b] {
@@ -554,7 +551,7 @@ mod tests {
     }
 
     #[test]
-    fn setup_a_secas_es_el_informe() {
+    fn setup_alone_is_the_report() {
         let args = parse_strs(&["--setup"]).unwrap();
         assert_eq!(args.mode, Mode::Setup);
         assert!(!args.dry_run && !args.close_steam && !args.restart_steam);
@@ -562,7 +559,7 @@ mod tests {
     }
 
     #[test]
-    fn los_modos_de_steam_se_reconocen() {
+    fn the_steam_modes_are_recognized() {
         assert_eq!(parse_strs(&["--uninstall"]).unwrap().mode, Mode::Uninstall);
         assert_eq!(
             parse_strs(&["--print-command"]).unwrap().mode,
@@ -575,7 +572,7 @@ mod tests {
     }
 
     #[test]
-    fn autostart_pide_on_u_off() {
+    fn autostart_requires_on_or_off() {
         assert_eq!(
             parse_strs(&["--autostart", "on"]).unwrap().mode,
             Mode::Autostart(true)
@@ -585,19 +582,19 @@ mod tests {
             Mode::Autostart(false)
         );
         assert!(parse_strs(&["--autostart"]).is_err());
-        assert!(parse_strs(&["--autostart", "quizas"]).is_err());
+        assert!(parse_strs(&["--autostart", "maybe"]).is_err());
     }
 
     #[test]
-    fn la_configuracion_de_steam_no_se_mezcla_con_un_juego() {
+    fn steam_configuration_does_not_mix_with_a_game() {
         assert!(parse_strs(&["--apply", "factorio.exe"]).is_err());
         assert!(parse_strs(&["--setup", "factorio.exe"]).is_err());
     }
 
     #[test]
-    fn la_ruta_del_juego_puede_no_ser_unicode() {
+    fn the_games_path_may_not_be_unicode() {
         use std::os::windows::ffi::OsStringExt;
-        // Un sustituto suelto no es UTF-16 válido, pero Windows lo permite en rutas.
+        // A lone surrogate isn't valid UTF-16, but Windows allows it in paths.
         let raw: OsString = OsString::from_wide(&[0x0043, 0xD800, 0x0046]);
         let args = parse([raw.clone()]).unwrap();
         assert_eq!(

@@ -1,9 +1,9 @@
-//! Lectura incremental de `factorio-current.log`.
+//! Incremental reading of `factorio-current.log`.
 //!
-//! Es la única fuente para el nombre del save: la API Lua de Factorio no lo
-//! expone. También cubre el modo degradado, cuando el mod no está instalado.
+//! It's the only source for the save name: the Factorio Lua API doesn't
+//! expose it. It also covers degraded mode, when the mod isn't installed.
 //!
-//! Formatos reales (capturados de Factorio 2.1.17):
+//! Real formats (captured from Factorio 2.1.17):
 //! ```text
 //!    0.002 2026-08-29 21:44:28; Factorio 2.1.17 (build 87315, win64, steam, space-age)
 //!  707.020 Loading map D:\factorio\saves\SI.zip: 10645541 bytes.
@@ -26,7 +26,7 @@ pub struct LogWatcher {
     path: PathBuf,
     offset: u64,
     facts: LogFacts,
-    /// Restos de una línea incompleta: el juego puede estar escribiéndola.
+    /// Remainder of an incomplete line: the game may still be writing it.
     partial: String,
 }
 
@@ -44,12 +44,12 @@ impl LogWatcher {
         &self.facts
     }
 
-    /// Lee lo que se haya añadido desde la última llamada.
+    /// Reads whatever has been appended since the last call.
     pub fn poll(&mut self) {
         let mut file = match std::fs::File::open(&self.path) {
             Ok(file) => file,
             Err(err) => {
-                debug!(%err, ruta = %self.path.display(), "log no accesible");
+                debug!(%err, path = %self.path.display(), "log not accessible");
                 return;
             }
         };
@@ -59,10 +59,11 @@ impl LogWatcher {
             Err(_) => return,
         };
 
-        // Factorio rota el log en cada arranque: current pasa a previous y se
-        // crea uno nuevo. Si encoge, empezamos de cero y olvidamos lo anterior.
+        // Factorio rotates the log on every startup: current becomes previous
+        // and a new one is created. If it shrinks, we start over and forget
+        // what came before.
         if len < self.offset {
-            debug!("el log se ha reiniciado; releyendo desde el principio");
+            debug!("log has been reset; rereading from the start");
             self.offset = 0;
             self.facts = LogFacts::default();
             self.partial.clear();
@@ -80,13 +81,13 @@ impl LogWatcher {
         }
         self.offset = len;
 
-        // El log es ASCII salvo por nombres de save o rutas con acentos.
+        // The log is ASCII except for save names or paths with accents.
         let text = String::from_utf8_lossy(&buffer);
         let mut pending = std::mem::take(&mut self.partial);
         pending.push_str(&text);
 
-        // Si el fragmento no acaba en salto de línea, la última línea está a
-        // medio escribir: se guarda para la próxima pasada.
+        // If the chunk doesn't end in a newline, the last line is still
+        // being written: it's saved for the next pass.
         let ends_complete = pending.ends_with('\n');
         let mut lines: Vec<&str> = pending.split('\n').collect();
         if !ends_complete {
@@ -109,7 +110,7 @@ impl LogWatcher {
                     self.facts.multiplayer = Some(false);
                 }
                 LoadedMap::MultiplayerDownload => {
-                    // El fichero es un temporal de descarga: no es un nombre útil.
+                    // The file is a download temp file: not a useful name.
                     self.facts.save_name = None;
                     self.facts.multiplayer = Some(true);
                 }
@@ -140,8 +141,8 @@ enum LoadedMap {
 fn parse_loading_map(line: &str) -> Option<LoadedMap> {
     let rest = line.split_once(" Loading map ")?.1;
 
-    // La ruta puede contener ':' (letra de unidad), así que el sufijo se quita
-    // por el final, no partiendo por el primer ':'.
+    // The path may contain ':' (drive letter), so the suffix is stripped
+    // from the end, not by splitting on the first ':'.
     let path = match rest.rsplit_once(": ") {
         Some((head, tail)) if tail.ends_with(" bytes.") => head,
         _ => rest,
@@ -158,7 +159,7 @@ fn parse_loading_map(line: &str) -> Option<LoadedMap> {
         .unwrap_or(path)
         .trim_end_matches(".zip");
 
-    // Al unirse a un servidor, Factorio carga el mapa descargado en temp/.
+    // When joining a server, Factorio loads the downloaded map into temp/.
     if file.eq_ignore_ascii_case("mp-download")
         || path.contains("/temp/")
         || path.contains("\\temp\\")
@@ -172,7 +173,7 @@ fn parse_loading_map(line: &str) -> Option<LoadedMap> {
     Some(LoadedMap::Save(file.to_string()))
 }
 
-/// Ruta del log dentro de la carpeta de datos de Factorio.
+/// Path to the log inside Factorio's data folder.
 pub fn default_log_path(data_dir: &Path) -> PathBuf {
     data_dir.join("factorio-current.log")
 }
@@ -181,7 +182,7 @@ pub fn default_log_path(data_dir: &Path) -> PathBuf {
 mod tests {
     use super::*;
 
-    // Líneas literales capturadas de una instalación real de Factorio 2.1.17.
+    // Literal lines captured from a real Factorio 2.1.17 installation.
     const HEADER: &str =
         "   0.002 2026-08-29 21:44:28; Factorio 2.1.17 (build 87315, win64, steam, space-age)";
     const LOADING: &str = " 707.020 Loading map D:\\factorio\\saves\\SI.zip: 10645541 bytes.";
@@ -191,30 +192,30 @@ mod tests {
                             state from(ConnectedDownloadingMap) to(ConnectedLoadingMap)";
 
     #[test]
-    fn extrae_la_version_del_juego() {
+    fn extracts_the_game_version() {
         assert_eq!(parse_version(HEADER).as_deref(), Some("2.1.17"));
         assert_eq!(parse_version(LOADING), None);
     }
 
     #[test]
-    fn extrae_el_nombre_del_save_quitando_el_sufijo_de_bytes() {
+    fn extracts_the_save_name_stripping_the_bytes_suffix() {
         match parse_loading_map(LOADING) {
             Some(LoadedMap::Save(name)) => assert_eq!(name, "SI"),
-            _ => panic!("debería reconocer un save normal"),
+            _ => panic!("should recognize a normal save"),
         }
     }
 
     #[test]
-    fn una_ruta_sin_sufijo_de_bytes_tambien_vale() {
+    fn a_path_without_bytes_suffix_also_works() {
         let line = " 707.020 Loading map /home/villa/.factorio/saves/Mi Partida.zip";
         match parse_loading_map(line) {
             Some(LoadedMap::Save(name)) => assert_eq!(name, "Mi Partida"),
-            _ => panic!("debería reconocer rutas unix"),
+            _ => panic!("should recognize unix paths"),
         }
     }
 
     #[test]
-    fn el_mapa_descargado_de_multijugador_no_es_un_nombre_de_save() {
+    fn the_multiplayer_downloaded_map_is_not_a_save_name() {
         assert!(matches!(
             parse_loading_map(MP_DOWNLOAD),
             Some(LoadedMap::MultiplayerDownload)
@@ -222,7 +223,7 @@ mod tests {
     }
 
     #[test]
-    fn secuencia_completa_deja_los_hechos_correctos() {
+    fn full_sequence_leaves_the_correct_facts() {
         let mut watcher = LogWatcher::new("no-existe");
         watcher.apply_line(HEADER);
         watcher.apply_line(LOADING);
@@ -232,7 +233,7 @@ mod tests {
     }
 
     #[test]
-    fn unirse_a_un_servidor_marca_multijugador_y_borra_el_save() {
+    fn joining_a_server_marks_multiplayer_and_clears_the_save() {
         let mut watcher = LogWatcher::new("no-existe");
         watcher.apply_line(LOADING);
         assert_eq!(watcher.facts().save_name.as_deref(), Some("SI"));
@@ -243,14 +244,14 @@ mod tests {
     }
 
     #[test]
-    fn las_transiciones_de_estado_marcan_multijugador() {
+    fn state_transitions_mark_multiplayer() {
         let mut watcher = LogWatcher::new("no-existe");
         watcher.apply_line(MP_STATE);
         assert_eq!(watcher.facts().multiplayer, Some(true));
     }
 
     #[test]
-    fn lineas_irrelevantes_no_cambian_nada() {
+    fn irrelevant_lines_change_nothing() {
         let mut watcher = LogWatcher::new("no-existe");
         watcher.apply_line("   0.232 Memory info:");
         watcher

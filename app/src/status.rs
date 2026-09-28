@@ -1,8 +1,8 @@
-//! Estado compartido entre el hilo de vigilancia y el icono de la bandeja.
+//! State shared between the watcher thread and the tray icon.
 //!
-//! Sin consola ni ventana, el icono es la única forma de saber si la aplicación
-//! está viva y qué está haciendo. Por eso el hilo trabajador publica aquí lo que
-//! ve, y el menú lo lee para el texto emergente.
+//! Without a console or a window, the icon is the only way to know whether
+//! the application is alive and what it's doing. That's why the worker
+//! thread publishes what it sees here, and the menu reads it for the tooltip.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -11,23 +11,23 @@ use std::sync::Mutex;
 pub struct Status {
     pub factorio_running: bool,
     pub discord_connected: bool,
-    /// `false` cuando el mod no está y sólo tenemos el registro del juego.
+    /// `false` when the mod isn't present and we only have the game log.
     pub mod_data: bool,
-    /// Lo que se está publicando ahora mismo, para verlo de un vistazo.
+    /// What's being published right now, to see it at a glance.
     pub headline: Option<String>,
 }
 
 impl Status {
-    /// Texto emergente del icono. Debe caber en una línea y decir lo esencial:
-    /// si falta Discord o falta Factorio, y qué se está publicando.
+    /// The icon's tooltip text. Must fit on one line and say the essentials:
+    /// whether Discord or Factorio is missing, and what's being published.
     pub fn tooltip(&self) -> String {
         let mut lines = vec!["Factorio Discord Rich Presence".to_string()];
 
         lines.push(match (self.factorio_running, self.discord_connected) {
-            (false, _) => "Factorio no está en ejecución".into(),
-            (true, false) => "Esperando a Discord…".into(),
-            (true, true) if self.mod_data => "Publicando".into(),
-            (true, true) => "Publicando (sin el mod)".into(),
+            (false, _) => "Factorio is not running".into(),
+            (true, false) => "Waiting for Discord…".into(),
+            (true, true) if self.mod_data => "Publishing".into(),
+            (true, true) => "Publishing (without the mod)".into(),
         });
 
         if let Some(headline) = &self.headline {
@@ -46,8 +46,8 @@ pub struct Shared {
 
 impl Shared {
     pub fn snapshot(&self) -> Status {
-        // Un candado envenenado no debe tumbar la aplicación: lo que hay dentro
-        // es informativo, no crítico.
+        // A poisoned lock shouldn't bring down the application: what's inside
+        // is informational, not critical.
         match self.status.lock() {
             Ok(status) => status.clone(),
             Err(poisoned) => poisoned.into_inner().clone(),
@@ -76,15 +76,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn el_texto_emergente_dice_que_falta() {
+    fn the_tooltip_text_says_whats_missing() {
         let parado = Status::default();
-        assert!(parado.tooltip().contains("Factorio no está en ejecución"));
+        assert!(parado.tooltip().contains("Factorio is not running"));
 
         let sin_discord = Status {
             factorio_running: true,
             ..Default::default()
         };
-        assert!(sin_discord.tooltip().contains("Esperando a Discord"));
+        assert!(sin_discord.tooltip().contains("Waiting for Discord"));
 
         let degradado = Status {
             factorio_running: true,
@@ -93,19 +93,19 @@ mod tests {
             headline: Some("claro".into()),
         };
         let texto = degradado.tooltip();
-        assert!(texto.contains("sin el mod"));
+        assert!(texto.contains("without the mod"));
         assert!(texto.contains("claro"));
 
         let completo = Status {
             mod_data: true,
             ..degradado
         };
-        assert!(completo.tooltip().contains("Publicando"));
-        assert!(!completo.tooltip().contains("sin el mod"));
+        assert!(completo.tooltip().contains("Publishing"));
+        assert!(!completo.tooltip().contains("without the mod"));
     }
 
     #[test]
-    fn el_cierre_se_pide_una_vez_y_persiste() {
+    fn shutdown_is_requested_once_and_persists() {
         let shared = Shared::default();
         assert!(!shared.is_shutdown());
         shared.request_shutdown();
@@ -114,7 +114,7 @@ mod tests {
     }
 
     #[test]
-    fn el_estado_se_actualiza_y_se_lee() {
+    fn status_is_updated_and_read() {
         let shared = Shared::default();
         shared.update(|status| status.factorio_running = true);
         assert!(shared.snapshot().factorio_running);

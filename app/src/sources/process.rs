@@ -1,16 +1,17 @@
-//! Detección del proceso de Factorio.
+//! Detection of the Factorio process.
 //!
-//! Es la condición maestra: sin proceso vivo no hay nada que publicar, y hay que
-//! borrar la actividad para no dejar el perfil colgado.
+//! This is the master condition: with no live process there's nothing to
+//! publish, and the activity must be cleared so the profile isn't left
+//! hanging.
 
 use std::time::{Duration, Instant};
 
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
 
-/// Nombres del ejecutable según plataforma e instalación.
+/// Executable names depending on platform and installation.
 const EXECUTABLES: &[&str] = &["factorio.exe", "factorio"];
 
-/// Enumerar procesos no es gratis; no hace falta más resolución que ésta.
+/// Enumerating processes isn't free; no more resolution than this is needed.
 const REFRESH_EVERY: Duration = Duration::from_secs(2);
 
 pub struct ProcessWatcher {

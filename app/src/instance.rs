@@ -1,17 +1,17 @@
-//! Instancia única por sesión de Windows.
+//! Single instance per Windows session.
 //!
-//! Con el autoarranque y la línea de Steam a la vez, cada arranque de Factorio
-//! lanzaría otra copia de la aplicación, todas publicando sobre la misma tarjeta
-//! de Discord. Un mutex con nombre deja pasar sólo a la primera.
+//! With autostart and the Steam launch line both active, every Factorio
+//! startup would launch another copy of the application, all publishing to
+//! the same Discord card. A named mutex only lets the first one through.
 
 use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, HANDLE};
 use windows_sys::Win32::System::Threading::CreateMutexW;
 
-/// Nombre del mutex. `Local\` lo limita a la sesión del usuario, de modo que dos
-/// usuarios en el mismo equipo no se estorban.
+/// Mutex name. `Local\` scopes it to the user's session, so two users on the
+/// same machine don't get in each other's way.
 const MUTEX_NAME: &str = "Local\\FactorioDiscordRichPresence";
 
-/// Mientras exista, esta copia es la única. Se libera al soltarlo.
+/// While it exists, this copy is the only one. It's released when dropped.
 pub struct InstanceGuard(HANDLE);
 
 impl Drop for InstanceGuard {
@@ -24,7 +24,7 @@ impl Drop for InstanceGuard {
     }
 }
 
-/// Toma la instancia única, o devuelve `None` si ya hay otra copia en marcha.
+/// Takes the single instance, or returns `None` if another copy is already running.
 pub fn acquire() -> Option<InstanceGuard> {
     acquire_named(MUTEX_NAME)
 }
@@ -34,8 +34,9 @@ fn acquire_named(name: &str) -> Option<InstanceGuard> {
 
     let handle = unsafe { CreateMutexW(std::ptr::null(), 0, wide.as_ptr()) };
     if handle.is_null() {
-        // Sin poder crear el mutex no se puede saber si hay otra copia. Mejor
-        // arrancar dos veces que no arrancar: la presencia es lo que se pide.
+        // Without being able to create the mutex, there's no way to know if
+        // another copy exists. Better to start twice than not start at all:
+        // presence is what's being asked for.
         return Some(InstanceGuard(handle));
     }
 
@@ -58,7 +59,7 @@ mod tests {
     }
 
     #[test]
-    fn la_segunda_copia_no_puede_tomarla() {
+    fn the_second_copy_cannot_acquire_it() {
         let name = unique("segunda");
         let first = acquire_named(&name);
         assert!(first.is_some());
@@ -66,7 +67,7 @@ mod tests {
     }
 
     #[test]
-    fn al_soltarla_otra_copia_puede_tomarla() {
+    fn releasing_it_lets_another_copy_acquire_it() {
         let name = unique("soltar");
         let first = acquire_named(&name);
         assert!(first.is_some());
@@ -75,7 +76,7 @@ mod tests {
     }
 
     #[test]
-    fn nombres_distintos_no_se_estorban() {
+    fn different_names_do_not_interfere_with_each_other() {
         let a = acquire_named(&unique("a"));
         let b = acquire_named(&unique("b"));
         assert!(a.is_some() && b.is_some());

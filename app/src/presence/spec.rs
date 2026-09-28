@@ -1,24 +1,21 @@
-//! Representación propia y comparable de una actividad de Discord.
+//! Our own, comparable representation of a Discord activity.
 //!
-//! El tipo `Activity` del crate usa `Cow<'a, str>`, lo que complica guardarlo para
-//! comparar contra el siguiente. `ActivitySpec` es dueño de sus datos, implementa
-//! `PartialEq` y se convierte a `Activity` justo antes de enviar.
+//! The crate's `Activity` type uses `Cow<'a, str>`, which makes it awkward to keep
+//! around for comparing against the next one. `ActivitySpec` owns its data, implements
+//! `PartialEq`, and converts to `Activity` right before sending.
 
 use discord_rich_presence::activity::{Activity, Assets, Party, Timestamps};
 
-/// Discord trunca los textos largos; recortamos nosotros para controlar dónde se corta.
-#[allow(
-    dead_code,
-    reason = "lo consume el renderer de plantillas en la fase 3"
-)]
+/// Discord truncates long texts; we trim it ourselves to control where it gets cut.
+#[allow(dead_code, reason = "consumed by the template renderer in phase 3")]
 pub const MAX_TEXT_LEN: usize = 128;
 
-/// Margen de tolerancia al comparar marcas de tiempo, en segundos.
+/// Tolerance margin when comparing timestamps, in seconds.
 ///
-/// El inicio del cronómetro se recalcula en cada actualización como
-/// `ahora − tiempo_jugado`, así que oscila uno o dos segundos aunque no haya
-/// pasado nada. Sin esta tolerancia el deduplicador no detectaría nunca dos
-/// estados iguales y gastaríamos el límite de una actualización cada 15 s.
+/// The timer's start is recalculated on every update as
+/// `now − playtime`, so it drifts by one or two seconds even when nothing
+/// has happened. Without this tolerance the deduplicator would never detect
+/// two equal states, and we'd burn through the one-update-per-15s limit.
 const TIMESTAMP_TOLERANCE_SECS: i64 = 5;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -29,17 +26,17 @@ pub struct ActivitySpec {
     pub large_text: Option<String>,
     pub small_image: Option<String>,
     pub small_text: Option<String>,
-    /// Instante Unix (segundos) en que arrancó el cronómetro.
+    /// Unix instant (seconds) at which the timer started.
     pub start_timestamp: Option<i64>,
-    /// (actual, máximo) de jugadores en la partida.
+    /// (current, max) players in the game.
     pub party: Option<(i32, i32)>,
 }
 
 impl ActivitySpec {
-    /// ¿Merece la pena gastar una actualización en enviar este estado?
+    /// Is it worth spending an update to send this state?
     ///
-    /// Todo se compara por igualdad exacta salvo el cronómetro, que tolera
-    /// [`TIMESTAMP_TOLERANCE_SECS`] de deriva.
+    /// Everything is compared by exact equality except the timer, which tolerates
+    /// [`TIMESTAMP_TOLERANCE_SECS`] of drift.
     pub fn differs_from(&self, previous: &ActivitySpec) -> bool {
         if self.details != previous.details
             || self.state != previous.state
@@ -59,7 +56,7 @@ impl ActivitySpec {
         }
     }
 
-    /// Construye el `Activity` del crate tomando prestados los datos de `self`.
+    /// Builds the crate's `Activity` by borrowing the data from `self`.
     pub fn to_activity(&self) -> Activity<'_> {
         let mut activity = Activity::new();
 
@@ -104,14 +101,11 @@ impl ActivitySpec {
     }
 }
 
-/// Recorta a [`MAX_TEXT_LEN`] respetando límites de carácter UTF-8.
+/// Truncates to [`MAX_TEXT_LEN`] respecting UTF-8 character boundaries.
 ///
-/// Importante para nombres de save y de tecnologías traducidas, que pueden
-/// contener acentos y caracteres multibyte.
-#[allow(
-    dead_code,
-    reason = "lo consume el renderer de plantillas en la fase 3"
-)]
+/// Important for save names and translated technology names, which can
+/// contain accents and multibyte characters.
+#[allow(dead_code, reason = "consumed by the template renderer in phase 3")]
 pub fn truncate(text: &str) -> String {
     if text.chars().count() <= MAX_TEXT_LEN {
         return text.to_string();
@@ -134,33 +128,33 @@ mod tests {
     }
 
     #[test]
-    fn estado_identico_no_se_reenvia() {
+    fn identical_state_is_not_resent() {
         assert!(!base().differs_from(&base()));
     }
 
     #[test]
-    fn deriva_pequena_del_cronometro_no_cuenta_como_cambio() {
+    fn small_timer_drift_does_not_count_as_a_change() {
         let mut drifted = base();
         drifted.start_timestamp = Some(1_000_003);
         assert!(!drifted.differs_from(&base()));
     }
 
     #[test]
-    fn salto_grande_del_cronometro_si_cuenta() {
+    fn a_large_timer_jump_does_count() {
         let mut reloaded = base();
         reloaded.start_timestamp = Some(1_000_600);
         assert!(reloaded.differs_from(&base()));
     }
 
     #[test]
-    fn cambio_de_texto_cuenta() {
+    fn a_text_change_counts() {
         let mut other = base();
         other.state = Some("Investigando Robótica (10%)".into());
         assert!(other.differs_from(&base()));
     }
 
     #[test]
-    fn truncado_respeta_caracteres_multibyte() {
+    fn truncation_respects_multibyte_characters() {
         let long = "á".repeat(200);
         let result = truncate(&long);
         assert_eq!(result.chars().count(), MAX_TEXT_LEN);
@@ -168,7 +162,7 @@ mod tests {
     }
 
     #[test]
-    fn truncado_deja_intacto_lo_corto() {
+    fn truncation_leaves_short_text_untouched() {
         assert_eq!(truncate("Fulgora"), "Fulgora");
     }
 }

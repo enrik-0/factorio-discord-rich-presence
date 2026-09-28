@@ -1,8 +1,9 @@
-//! Fusión de las fuentes en un único `GameState`.
+//! Merging the sources into a single `GameState`.
 //!
-//! Prioridad: el mod manda sobre el log, y el log sobre la mera detección de
-//! proceso. Cada campo se resuelve por separado, así que un mod sin el ajuste de
-//! planeta activo sigue aportando investigación mientras el save viene del log.
+//! Priority: the mod overrides the log, and the log overrides mere process
+//! detection. Each field is resolved independently, so a mod without the
+//! active-planet setting still contributes research while the save comes
+//! from the log.
 
 use crate::model::{GameState, ModState};
 use crate::sources::logfile::LogFacts;
@@ -14,8 +15,8 @@ pub fn merge(running: bool, log: &LogFacts, mod_state: Option<&ModState>) -> Gam
     };
 
     if !running {
-        // Sin proceso no hay nada que contar: los datos residuales de las otras
-        // fuentes describirían una partida que ya no existe.
+        // With no process there's nothing to report: leftover data from the
+        // other sources would describe a game that no longer exists.
         return state;
     }
 
@@ -24,7 +25,7 @@ pub fn merge(running: bool, log: &LogFacts, mod_state: Option<&ModState>) -> Gam
     state.game_version = log.game_version.clone();
     state.multiplayer = log.multiplayer;
 
-    // --- mod (gana donde solape) ---
+    // --- mod (wins where it overlaps) ---
     if let Some(data) = mod_state {
         state.player_name = Some(data.player.name.clone());
         state.controller = Some(data.player.controller.clone());
@@ -106,7 +107,7 @@ mod tests {
     }
 
     #[test]
-    fn sin_proceso_el_estado_queda_vacio() {
+    fn with_no_process_the_state_is_empty() {
         let state = merge(false, &log_facts(), Some(&mod_state()));
         assert!(!state.running);
         assert!(state.save_name.is_none());
@@ -114,7 +115,7 @@ mod tests {
     }
 
     #[test]
-    fn modo_degradado_usa_solo_el_log() {
+    fn degraded_mode_uses_only_the_log() {
         let state = merge(true, &log_facts(), None);
         assert_eq!(state.save_name.as_deref(), Some("SI"));
         assert_eq!(state.game_version.as_deref(), Some("2.1.17"));
@@ -122,12 +123,12 @@ mod tests {
     }
 
     #[test]
-    fn el_mod_aporta_lo_que_el_log_no_sabe() {
+    fn the_mod_contributes_what_the_log_does_not_know() {
         let state = merge(true, &log_facts(), Some(&mod_state()));
         assert_eq!(
             state.save_name.as_deref(),
             Some("SI"),
-            "el save viene del log"
+            "the save name comes from the log"
         );
         assert_eq!(
             state.surface.as_ref().unwrap().planet.as_deref(),
@@ -138,21 +139,21 @@ mod tests {
     }
 
     #[test]
-    fn el_mod_gana_al_log_en_multijugador() {
-        // El log dice single porque cargó un save local; el mod ve la verdad.
+    fn the_mod_wins_over_the_log_for_multiplayer() {
+        // The log says single because it loaded a local save; the mod sees the truth.
         let state = merge(true, &log_facts(), Some(&mod_state()));
         assert_eq!(state.multiplayer, Some(true));
         assert_eq!(state.players_online, Some(4));
     }
 
     #[test]
-    fn la_hora_de_escritura_del_mod_llega_al_estado() {
+    fn the_mods_write_time_reaches_the_state() {
         let state = merge(true, &log_facts(), Some(&mod_state()));
         assert_eq!(state.sampled_at, Some(1_700_000_000));
     }
 
     #[test]
-    fn las_estadisticas_meme_llegan_al_estado() {
+    fn the_meme_stats_reach_the_state() {
         let state = merge(true, &log_facts(), Some(&mod_state()));
         assert_eq!(state.trees_razed, Some(1_337));
         assert_eq!(state.enemies_killed, Some(58));
@@ -162,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn sin_mod_ni_log_queda_solo_el_proceso() {
+    fn with_no_mod_or_log_only_the_process_remains() {
         let state = merge(true, &LogFacts::default(), None);
         assert!(state.running);
         assert!(state.save_name.is_none());

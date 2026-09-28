@@ -1,4 +1,4 @@
-//! Publicación del estado en Discord.
+//! Publishing the state to Discord.
 
 pub mod discord;
 pub mod layout;
