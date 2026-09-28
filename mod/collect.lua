@@ -1,32 +1,32 @@
--- Recolección del estado que se publica en Discord.
+-- Collects the state that gets published to Discord.
 --
--- Todo lo caro (recorrer `force.technologies`) vive en caché en `storage` y se
--- recalcula sólo por eventos; aquí no se itera nada de coste variable.
+-- Anything expensive (walking `force.technologies`) is cached in `storage` and
+-- only recomputed on events; nothing of variable cost is iterated here.
 --
--- Se envía siempre toda la información disponible: el fichero no sale del
--- equipo. Lo que el jugador elige es qué se *muestra*, y eso viaja en el bloque
--- `display` para que la aplicación lo obedezca.
+-- All available information is always sent: the file never leaves the
+-- machine. What the player chooses is what gets *shown*, and that travels in
+-- the `display` block for the app to obey.
 
 local collect = {}
 
--- Las tecnologías infinitas (productividad de minería y compañía) declaran
--- `max_level` como el máximo de un uint32. Nunca pasan a `researched`, sólo
--- suben de nivel, así que contarlas falsearía el "41/1510".
+-- Infinite technologies (mining and rocket-launch productivity) declare
+-- `max_level` as the max of a uint32. They never move to `researched`, they
+-- only level up, so counting them would fake the "41/1510".
 --
--- No sirve filtrar por `prototype.upgrade`: en vanilla, tecnologías finitas como
--- physical-projectile-damage-3 también son de tipo upgrade.
+-- Filtering by `prototype.upgrade` doesn't work: in vanilla, finite techs like
+-- physical-projectile-damage-3 are also of type upgrade.
 local INFINITE_MAX_LEVEL = 4294967295
 
---- Cuenta tecnologías finitas investigadas y totales de una fuerza.
---- Caro: recorre `force.technologies`, que es un LuaCustomTable (cada acceso
---- cruza la frontera Lua/C++). Llamar sólo desde los eventos que lo justifican.
+--- Counts a force's finished and total finite technologies.
+--- Expensive: walks `force.technologies`, a LuaCustomTable (each access
+--- crosses the Lua/C++ boundary). Only call from the events that justify it.
 --- @return number done, number total
 function collect.count_technologies(force)
   local done, total = 0, 0
   for _, tech in pairs(force.technologies) do
     if tech.prototype.max_level < INFINITE_MAX_LEVEL then
-      -- Una tecnología deshabilitada por un mod pero ya investigada sigue
-      -- contando: el jugador la investigó.
+      -- A tech disabled by a mod but already researched still counts: the
+      -- player did research it.
       if tech.enabled or tech.researched then
         total = total + 1
         if tech.researched then
@@ -38,7 +38,7 @@ function collect.count_technologies(force)
   return done, total
 end
 
---- Clasifica una superficie para que la aplicación sepa qué es.
+--- Classifies a surface so the app knows what it is.
 --- @return string kind, string|nil planet
 local function describe_surface(surface)
   if surface.platform then
@@ -48,12 +48,12 @@ local function describe_surface(surface)
   if planet then
     return "planet", planet.name
   end
-  -- Superficies de mods (Factorissimo, Space Exploration, fábricas...).
+  -- Surfaces from mods (Factorissimo, Space Exploration, factories...).
   return "other", nil
 end
 
---- Factor de evolución de la superficie donde está el jugador.
---- Una sola llamada, sin iterar. En superficies sin enemigos devuelve 0.
+--- Evolution factor of the surface the player is on.
+--- A single call, no iteration. Returns 0 on surfaces without enemies.
 local function evolution_of(force, surface)
   local ok, value = pcall(force.get_evolution_factor, surface)
   if ok and type(value) == "number" then
@@ -63,15 +63,15 @@ local function evolution_of(force, surface)
 end
 
 --------------------------------------------------------------------------------
--- Estadísticas "meme": árboles arrasados, enemigos abatidos, muertes y
--- contaminación. `get_kill_count_statistics` es por fuerza y superficie, así
--- que hay que sumar todas las superficies (Space Age tiene varias).
+-- "Meme" stats: trees razed, enemies killed, deaths and pollution.
+-- `get_kill_count_statistics` is per force and surface, so every surface has
+-- to be summed (Space Age has several).
 --------------------------------------------------------------------------------
 
--- Tipos de prototipo que cuentan como enemigo. `input_counts` ya sólo trae lo
--- que la fuerza ha matado (no lo propio), así que no hace falta excluir nada
--- del jugador: sólo hay que separar enemigos de árboles y de otras bajas
--- neutrales (rocas, peces...) que no interesan para este contador.
+-- Prototype types that count as an enemy. `input_counts` already only holds
+-- what the force has killed (never its own), so nothing of the player's needs
+-- excluding: this just separates enemies from trees and other neutral
+-- casualties (rocks, fish...) that don't matter for this counter.
 local ENEMY_TYPES = {
   ["unit"] = true,
   ["unit-spawner"] = true,
@@ -80,14 +80,14 @@ local ENEMY_TYPES = {
   ["electric-turret"] = true,
   ["fluid-turret"] = true,
   ["spider-unit"] = true,
-  ["segment"] = true, -- segmentos del demolisher (Gleba, Space Age)
-  ["segmented-unit"] = true, -- el demolisher en sí
+  ["segment"] = true, -- demolisher segments (Gleba, Space Age)
+  ["segmented-unit"] = true, -- the demolisher itself
 }
 
---- Bajas y muertes de una fuerza, sumadas en todas las superficies.
---- Caro: recorre `input_counts`/`output_counts` de cada superficie, que son
---- LuaCustomTable. Llamar como mucho una vez por fuerza y escritura (ver
---- `combat_stats_of` en control.lua, que cachea el resultado dentro del tick).
+--- A force's kills and deaths, summed across every surface.
+--- Expensive: walks each surface's `input_counts`/`output_counts`, which are
+--- LuaCustomTable. Call at most once per force and write (see
+--- `combat_stats_of` in control.lua, which caches the result within the tick).
 --- @return number enemies, number trees, number deaths
 function collect.combat_stats(force)
   local enemies, trees, deaths = 0, 0, 0
@@ -105,8 +105,8 @@ function collect.combat_stats(force)
           end
         end
       end
-      -- El propio personaje siempre se llama "character"; con otros mods de
-      -- cuerpo el jugador podría morir con otro nombre y no contaría aquí.
+      -- The player's own character is always named "character"; with other
+      -- body mods the player might die under a different name and not count.
       deaths = deaths + (stats.output_counts["character"] or 0)
     end
   end
@@ -114,13 +114,12 @@ function collect.combat_stats(force)
   return enemies, trees, deaths
 end
 
---- Contaminación total emitida, sumada en todas las superficies del juego.
+--- Total pollution emitted, summed across every surface in the game.
 ---
---- No es por fuerza: `LuaFlowStatistics.force` es `nil` para las estadísticas
---- de contaminación, así que la API no permite aislar sólo la tuya. En
---- multijugador con más de una fuerza, este número incluye la contaminación
---- de todo el mundo, no sólo la propia. Aun así vale para el propósito "meme"
---- de este campo.
+--- Not per force: `LuaFlowStatistics.force` is `nil` for pollution
+--- statistics, so the API doesn't allow isolating just yours. In multiplayer
+--- with more than one force, this number includes everyone's pollution, not
+--- just your own. Still good enough for this field's "meme" purpose.
 --- @return number
 function collect.total_pollution()
   local total = 0
@@ -137,7 +136,7 @@ function collect.total_pollution()
   return total
 end
 
---- Construye la tabla que se serializa a JSON para un jugador.
+--- Builds the table that gets serialized to JSON for a player.
 function collect.build_payload(player, opts)
   local force = player.force
   local surface = player.physical_surface
@@ -187,8 +186,8 @@ function collect.build_payload(player, opts)
     trees_razed = opts.combat and opts.combat.trees,
     player_deaths = opts.combat and opts.combat.deaths,
     pollution_emitted = opts.pollution,
-    -- Ticks desde la última acción del jugador. Es un valor "en vivo": no se
-    -- cachea como las tecnologías, se lee tal cual en cada escritura.
+    -- Ticks since the player's last action. A "live" value: not cached like
+    -- the technologies, read as-is on every write.
     afk_ticks = player.afk_time,
   }
 end
