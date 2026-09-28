@@ -1,8 +1,8 @@
-//! Conexión con el cliente local de Discord vía IPC.
+//! Connection to the local Discord client via IPC.
 //!
-//! Responsabilidades: mantener la conexión viva (Discord puede no estar
-//! arrancado, o reiniciarse en cualquier momento), respetar el límite de
-//! actualizaciones y no gastar envíos en estados que no han cambiado.
+//! Responsibilities: keeping the connection alive (Discord might not be
+//! running, or might restart at any moment), respecting the update rate
+//! limit, and not spending sends on states that haven't changed.
 
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -12,13 +12,13 @@ use tracing::{debug, info, warn};
 
 use super::spec::ActivitySpec;
 
-/// Discord limita las actualizaciones de actividad a una cada 15 segundos.
+/// Discord limits activity updates to one every 15 seconds.
 pub const MIN_UPDATE_INTERVAL: Duration = Duration::from_secs(15);
 
 const BACKOFF_INITIAL: Duration = Duration::from_secs(2);
 const BACKOFF_MAX: Duration = Duration::from_secs(60);
 
-/// Instante Unix actual en segundos.
+/// Current Unix instant in seconds.
 pub fn unix_now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -29,9 +29,9 @@ pub fn unix_now() -> i64 {
 pub struct DiscordSink {
     client: DiscordIpcClient,
     connected: bool,
-    /// Espera actual entre reintentos de conexión.
+    /// Current wait between connection retries.
     backoff: Duration,
-    /// Momento a partir del cual se puede volver a intentar conectar.
+    /// Moment from which a reconnection attempt can be made again.
     retry_after: Option<Instant>,
     last_sent_at: Option<Instant>,
     last_spec: Option<ActivitySpec>,
@@ -39,7 +39,7 @@ pub struct DiscordSink {
 
 impl DiscordSink {
     pub fn new(application_id: &str) -> Result<Self> {
-        // `DiscordIpcClient::new` sólo guarda el id; no abre nada todavía.
+        // `DiscordIpcClient::new` only stores the id; it doesn't open anything yet.
         let client = DiscordIpcClient::new(application_id);
 
         Ok(Self {
@@ -56,10 +56,10 @@ impl DiscordSink {
         self.connected
     }
 
-    /// Intenta conectar si toca. No es un error que Discord esté cerrado: se
-    /// reintenta más tarde con espera creciente.
+    /// Attempts to connect if it's time. It's not an error for Discord to be
+    /// closed: it retries later with increasing backoff.
     ///
-    /// Devuelve `true` si hay conexión utilizable.
+    /// Returns `true` if there is a usable connection.
     pub fn ensure_connected(&mut self) -> bool {
         if self.connected {
             return true;
@@ -72,18 +72,18 @@ impl DiscordSink {
 
         match self.client.connect() {
             Ok(()) => {
-                info!("conectado al IPC de Discord");
+                info!("connected to Discord's IPC");
                 self.connected = true;
                 self.backoff = BACKOFF_INITIAL;
                 self.retry_after = None;
-                // Una reconexión descarta el estado que Discord tenía: hay que
-                // reenviar aunque el contenido no haya cambiado.
+                // A reconnection discards the state Discord had: it must be
+                // resent even if the content hasn't changed.
                 self.last_spec = None;
                 self.last_sent_at = None;
                 true
             }
             Err(err) => {
-                debug!(%err, reintento_en = ?self.backoff, "Discord no disponible");
+                debug!(%err, retry_in = ?self.backoff, "Discord not available");
                 self.retry_after = Some(Instant::now() + self.backoff);
                 self.backoff = (self.backoff * 2).min(BACKOFF_MAX);
                 false
@@ -91,9 +91,9 @@ impl DiscordSink {
         }
     }
 
-    /// Publica el estado si ha cambiado y si el límite de tiempo lo permite.
+    /// Publishes the state if it has changed and if the time limit allows it.
     ///
-    /// Devuelve `true` si se envió algo.
+    /// Returns `true` if something was sent.
     pub fn publish(&mut self, spec: &ActivitySpec) -> bool {
         if !self.ensure_connected() {
             return false;
@@ -107,47 +107,47 @@ impl DiscordSink {
 
         if let Some(sent_at) = self.last_sent_at {
             if sent_at.elapsed() < MIN_UPDATE_INTERVAL {
-                debug!("cambio pendiente: aún dentro del límite de 15 s");
+                debug!("change pending: still within the 15 s limit");
                 return false;
             }
         }
 
         match self.client.set_activity(spec.to_activity()) {
             Ok(()) => {
-                debug!(?spec, "actividad publicada");
+                debug!(?spec, "activity published");
                 self.last_spec = Some(spec.clone());
                 self.last_sent_at = Some(Instant::now());
                 true
             }
             Err(err) => {
-                warn!(%err, "fallo al publicar; se marcará para reconectar");
+                warn!(%err, "publish failed; will be marked for reconnection");
                 self.drop_connection();
                 false
             }
         }
     }
 
-    /// Borra la actividad (Factorio ya no está en ejecución).
+    /// Clears the activity (Factorio is no longer running).
     ///
-    /// La usa el bucle principal de la fase 4, cuando la fuente `process`
-    /// deja de ver `factorio.exe`.
-    #[allow(dead_code, reason = "el bucle principal llega en la fase 4")]
+    /// Used by the phase 4 main loop, when the `process` source
+    /// stops seeing `factorio.exe`.
+    #[allow(dead_code, reason = "the main loop lands in phase 4")]
     pub fn clear(&mut self) {
         if !self.connected {
             return;
         }
-        // Nada que borrar si nunca llegamos a publicar.
+        // Nothing to clear if we never got to publish.
         if self.last_spec.is_none() {
             return;
         }
         match self.client.clear_activity() {
             Ok(()) => {
-                debug!("actividad borrada");
+                debug!("activity cleared");
                 self.last_spec = None;
                 self.last_sent_at = None;
             }
             Err(err) => {
-                warn!(%err, "fallo al borrar la actividad");
+                warn!(%err, "failed to clear the activity");
                 self.drop_connection();
             }
         }
