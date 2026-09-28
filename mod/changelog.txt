@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.5.1
+Date: 2026-09-28
+  Changes:
+    - Lowered the minimum required version to Factorio 2.0 (was pinned to 2.1). The mod only used
+      2.0-era API already, so there was no reason to require 2.1.
+    - Code comments translated to English.
+---------------------------------------------------------------------------------------------------
 Version: 0.5.0
 Date: 2026-09-27
   Changes:
