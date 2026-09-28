@@ -1,4 +1,4 @@
--- Discord Rich Presence for Factorio 2.1
+-- Discord Rich Presence for Factorio 2.0+
 --
 -- The mod only produces data: it writes a JSON file under script-output/discord-rp/.
 -- The companion app reads it and talks to Discord. Factorio's sandbox doesn't

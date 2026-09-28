@@ -1,4 +1,4 @@
-//! Discord Rich Presence for Factorio 2.1.
+//! Discord Rich Presence for Factorio 2.0+.
 //!
 //! The Factorio mod writes the game state to `script-output`; this app
 //! reads it, fills it in with the game's log, and publishes it to Discord.
@@ -35,7 +35,7 @@ use crate::presence::{ActivitySpec, DiscordSink};
 use crate::status::Shared;
 
 const HELP: &str = "\
-Discord Rich Presence for Factorio 2.1
+Discord Rich Presence for Factorio 2.0+
 
 USAGE:
     factorio-discord-rp [OPTIONS]

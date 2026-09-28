@@ -16,8 +16,8 @@ rompería el determinismo en multijugador. Así que:
 
 ## Requisitos
 
-- Windows, y Factorio **2.1** (el mod declara `factorio_version: "2.1"`; Factorio no
-  tiene compatibilidad hacia delante, así que no carga en 2.0)
+- Windows, y Factorio **2.0** o superior (el mod declara `factorio_version: "2.0"`;
+  Factorio no tiene compatibilidad hacia delante, así que no carga en 1.1)
 - Si juegas a Factorio desde Steam, no hace falta nada más: el instalador lo detecta
   solo.
 
