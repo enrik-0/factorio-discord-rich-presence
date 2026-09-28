@@ -20,10 +20,12 @@ sysinfo = "0.39.6"
 toml = "1.1.4"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-tray-icon = "0.24.2"
 
-# El registro, el portapapeles y la ventana de consola son de Windows; en otras
-# plataformas no hace falta ni intentar resolver este crate.
+# El registro, el portapapeles, la ventana de consola y el icono de bandeja
+# (tray-icon/muda necesitan GTK en Linux, que este proyecto no compromete a
+# tener disponible) son de Windows; en otras plataformas no hace falta ni
+# intentar resolver estos crates. La versión "mínimo viable" en Linux corre
+# en modo consola (--console), sin bandeja.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = [
     "Win32_Foundation",
@@ -35,6 +37,7 @@ windows-sys = { version = "0.61.2", features = [
     "Win32_System_Threading",
     "Win32_UI_WindowsAndMessaging",
 ] }
+tray-icon = "0.24.2"
 
 # El bloqueo de instancia única en Unix se hace con flock sobre un fichero.
 [target.'cfg(unix)'.dependencies]

@@ -20,6 +20,13 @@ pub struct Status {
 impl Status {
     /// Texto emergente del icono. Debe caber en una línea y decir lo esencial:
     /// si falta Discord o falta Factorio, y qué se está publicando.
+    #[cfg_attr(
+        unix,
+        allow(
+            dead_code,
+            reason = "lo consume la bandeja de Windows (tray.rs); sin bandeja en Unix todavía"
+        )
+    )]
     pub fn tooltip(&self) -> String {
         let mut lines = vec!["Factorio Discord Rich Presence".to_string()];
 
@@ -45,6 +52,13 @@ pub struct Shared {
 }
 
 impl Shared {
+    #[cfg_attr(
+        unix,
+        allow(
+            dead_code,
+            reason = "lo consume la bandeja de Windows (tray.rs); sin bandeja en Unix todavía"
+        )
+    )]
     pub fn snapshot(&self) -> Status {
         // Un candado envenenado no debe tumbar la aplicación: lo que hay dentro
         // es informativo, no crítico.

@@ -17,9 +17,15 @@ mod model;
 mod paths;
 mod presence;
 mod run;
+// La configuración de Steam (registro, VDF, portapapeles Win32) es de Windows;
+// en Linux, "mínimo viable" significa sin esto por ahora (ver plan del port).
+#[cfg(windows)]
 mod setup;
 mod sources;
 mod status;
+// tray-icon necesita GTK en Linux (ver app/Cargo.toml); "mínimo viable" en esa
+// plataforma corre en modo consola/fichero, sin icono de bandeja.
+#[cfg(windows)]
 mod tray;
 
 use std::ffi::OsString;
@@ -258,6 +264,7 @@ fn main() -> Result<()> {
 
 /// Modos de configuración de Steam: hacen su trabajo, imprimen y salen con el
 /// código que corresponde (0, 10, 11, 12 o 1; ver `setup::Failure`).
+#[cfg(windows)]
 fn run_setup(args: &Args) -> Result<()> {
     use setup::Action;
 
@@ -286,13 +293,25 @@ fn run_setup(args: &Args) -> Result<()> {
     Ok(())
 }
 
+/// En Linux/macOS no hay integración con Steam ni con el registro de Windows
+/// todavía (fuera del alcance del port "mínimo viable"): se avisa con
+/// claridad en vez de fallar en la compilación o simular algo a medias.
+#[cfg(unix)]
+fn run_setup(_args: &Args) -> Result<()> {
+    eprintln!(
+        "error: --setup/--apply/--uninstall/--print-command/--copy-command/--autostart \
+         sólo están soportados en Windows por ahora."
+    );
+    std::process::exit(1);
+}
+
 /// Bandeja residente, por ejemplo la del autoarranque. Una sola por sesión.
 fn run_resident(config: Config, log_path: Option<PathBuf>) -> Result<()> {
     let Some(_guard) = instance::acquire() else {
         info!("ya hay otra copia de la aplicación en marcha; no se abre otra");
         return Ok(());
     };
-    tray::run(config, log_path, false)
+    run_as_resident(config, log_path, false)
 }
 
 /// Modo lanzador: arranca Factorio y se queda mientras siga abierto.
@@ -320,7 +339,21 @@ fn launch(config_path: Option<&Path>, log_path: Option<PathBuf>, game: GameComma
         }
     };
 
-    tray::run(config, log_path, true)
+    run_as_resident(config, log_path, true)
+}
+
+/// Vigila y publica de forma "residente": con icono de bandeja en Windows, o
+/// en el mismo hilo sin bandeja en el resto (el registro ya va a fichero,
+/// configurado por `main()` antes de llegar aquí).
+#[cfg(windows)]
+fn run_as_resident(config: Config, log_path: Option<PathBuf>, exit_with_game: bool) -> Result<()> {
+    tray::run(config, log_path, exit_with_game)
+}
+
+#[cfg(unix)]
+fn run_as_resident(config: Config, _log_path: Option<PathBuf>, exit_with_game: bool) -> Result<()> {
+    let shared = Arc::new(Shared::default());
+    run::run(&config, &shared, exit_with_game)
 }
 
 /// Arranca el juego sin esperarlo. Soltar el `Child` no lo detiene.
@@ -351,11 +384,18 @@ fn spawn_game(game: &GameCommand) -> Result<()> {
 /// `--dump` funcionen con normalidad desde una terminal. La contrapartida es que
 /// al arrancar con Windows aparece una consola, que se cierra aquí. Si el
 /// proceso viene de una terminal, esto sólo lo desengancha de ella.
+#[cfg(windows)]
 fn hide_console() {
     unsafe {
         windows_sys::Win32::System::Console::FreeConsole();
     }
 }
+
+/// En Unix no hay ventana de consola que ocultar: el proceso ya nace sin una
+/// si se lanza como servicio, y si se lanza desde una terminal es normal que
+/// siga ligado a ella.
+#[cfg(unix)]
+fn hide_console() {}
 
 /// Comprueba lo que se puede comprobar sin depender de Discord ni de Factorio.
 fn run_check(config: &Config) -> Result<()> {
@@ -595,6 +635,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(windows)]
     fn la_ruta_del_juego_puede_no_ser_unicode() {
         use std::os::windows::ffi::OsStringExt;
         // Un sustituto suelto no es UTF-16 válido, pero Windows lo permite en rutas.

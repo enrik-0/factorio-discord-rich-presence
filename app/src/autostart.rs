@@ -34,6 +34,14 @@ pub fn is_enabled() -> bool {
         .unwrap_or(false)
 }
 
+#[cfg_attr(
+    unix,
+    allow(
+        dead_code,
+        reason = "sólo la llama --autostart, gateado a Windows por ahora (ver setup/); \
+                  la función en sí ya es multiplataforma vía auto-launch"
+    )
+)]
 pub fn set_enabled(enabled: bool) -> Result<()> {
     let launcher = launcher()?;
     if enabled {
