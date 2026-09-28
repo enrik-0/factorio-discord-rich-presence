@@ -1,23 +1,23 @@
-//! Edición mínima de `LaunchOptions` en el `localconfig.vdf` de Steam.
+//! Minimal editing of `LaunchOptions` in Steam's `localconfig.vdf`.
 //!
-//! No es un analizador VDF completo. Sólo hace falta localizar el bloque de una
-//! aplicación (`apps` → `<id>`) y leer, cambiar o quitar una clave suya, dejando
-//! intacto el resto del fichero byte a byte: sangría, saltos de línea y todo lo
-//! que Steam haya escrito. Un fichero de 650 KB con cientos de bloques no se
-//! reserializa; se corta y se cose por la posición exacta.
+//! This isn't a full VDF parser. All that's needed is to locate an application's
+//! block (`apps` → `<id>`) and read, change or remove one of its keys, leaving
+//! the rest of the file intact byte for byte: indentation, line breaks and
+//! everything else Steam wrote. A 650 KB file with hundreds of blocks isn't
+//! reserialized; it's cut and stitched at the exact position.
 
 use anyhow::{bail, Result};
 
 const KEY: &str = "LaunchOptions";
 
-/// Un símbolo del texto con sus posiciones en bytes.
+/// A text symbol with its byte positions.
 ///
-/// Se trabaja sobre bytes porque `"`, `\`, `{` y `}` son ASCII y nunca aparecen
-/// dentro de una secuencia UTF-8 multibyte: cortar en ellos es siempre válido.
+/// This works on bytes because `"`, `\`, `{` and `}` are ASCII and never appear
+/// inside a multibyte UTF-8 sequence: cutting on them is always valid.
 #[derive(Debug, Clone, Copy)]
 enum Token {
-    /// Cadena entrecomillada: `start` es el primer byte tras la comilla de
-    /// apertura y `end` el de la comilla de cierre (contenido = `start..end`).
+    /// Quoted string: `start` is the first byte after the opening quote and
+    /// `end` is the closing quote (content = `start..end`).
     Str {
         start: usize,
         end: usize,
@@ -38,7 +38,7 @@ fn tokenize(text: &str) -> Vec<Token> {
                 let mut j = start;
                 while j < bytes.len() && bytes[j] != b'"' {
                     if bytes[j] == b'\\' {
-                        j += 1; // el carácter escapado no cierra la cadena
+                        j += 1; // the escaped character doesn't close the string
                     }
                     j += 1;
                 }
@@ -66,7 +66,7 @@ fn tokenize(text: &str) -> Vec<Token> {
     tokens
 }
 
-/// Deshace el escapado VDF: `\\` → `\`, `\"` → `"`, `\n`, `\t`.
+/// Undoes VDF escaping: `\\` → `\`, `\"` → `"`, `\n`, `\t`.
 pub fn unescape(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
     let mut chars = raw.chars();
@@ -85,12 +85,12 @@ pub fn unescape(raw: &str) -> String {
     out
 }
 
-/// Escapa un valor para escribirlo entre comillas: `\` → `\\`, `"` → `\"`.
+/// Escapes a value for writing it between quotes: `\` → `\\`, `"` → `\"`.
 pub fn escape(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
-/// Posición de un bloque en la lista de símbolos: su `{` y su `}`.
+/// Position of a block in the token list: its `{` and its `}`.
 struct Block {
     open: usize,
     close: usize,
@@ -113,10 +113,11 @@ fn matching_close(tokens: &[Token], open: usize) -> Option<usize> {
     None
 }
 
-/// Localiza `apps` → `<app_id> { … }`.
+/// Locates `apps` → `<app_id> { … }`.
 ///
-/// Se exige que el padre sea `apps`: el mismo número aparece en otras secciones
-/// de `localconfig.vdf` como valor suelto, y no son el bloque de la aplicación.
+/// The parent is required to be `apps`: the same number appears in other
+/// sections of `localconfig.vdf` as a standalone value, and those aren't the
+/// application's block.
 fn find_app_block(text: &str, tokens: &[Token], app_id: &str) -> Option<Block> {
     let mut stack: Vec<&str> = Vec::new();
     let mut i = 0;
@@ -132,7 +133,7 @@ fn find_app_block(text: &str, tokens: &[Token], app_id: &str) -> Option<Block> {
                     return Some(Block { open, close });
                 }
                 stack.push(key);
-                i += 2; // clave y llave
+                i += 2; // key and brace
                 continue;
             }
             Token::Close(_) => {
@@ -146,16 +147,17 @@ fn find_app_block(text: &str, tokens: &[Token], app_id: &str) -> Option<Block> {
     None
 }
 
-/// Dónde está `LaunchOptions` dentro de un bloque: comillas de apertura de la
-/// clave y rango del contenido del valor.
+/// Where `LaunchOptions` is within a block: the opening quote of the key and
+/// the range of the value's content.
 struct Found {
     key_quote: usize,
     value_start: usize,
     value_end: usize,
 }
 
-/// Busca la clave sólo entre los hijos directos del bloque, sin bajar a los
-/// sub-bloques (`cloud`, `autocloud`…), que podrían tener claves homónimas.
+/// Looks for the key only among the block's direct children, without going
+/// down into sub-blocks (`cloud`, `autocloud`…), which could have keys with
+/// the same name.
 fn find_launch_options(text: &str, tokens: &[Token], block: &Block) -> Option<Found> {
     let mut depth = 0i32;
     let mut i = block.open + 1;
@@ -201,7 +203,7 @@ fn newline_style(text: &str) -> &'static str {
     }
 }
 
-/// Inicio de la línea que contiene la posición `pos`.
+/// Start of the line containing position `pos`.
 fn line_start(text: &str, pos: usize) -> usize {
     text[..pos].rfind('\n').map_or(0, |i| i + 1)
 }
@@ -210,13 +212,13 @@ fn app_block(text: &str, tokens: &[Token], app_id: &str) -> Result<Block> {
     match find_app_block(text, tokens, app_id) {
         Some(block) => Ok(block),
         None => bail!(
-            "no hay bloque de la aplicación {app_id} en localconfig.vdf; \
-             Steam lo crea la primera vez que se abre el juego desde su biblioteca"
+            "no application block for {app_id} in localconfig.vdf; \
+             Steam creates it the first time the game is opened from its library"
         ),
     }
 }
 
-/// Opciones de lanzamiento actuales, o `None` si no hay ninguna definida.
+/// Current launch options, or `None` if none are defined.
 pub fn launch_options(text: &str, app_id: &str) -> Result<Option<String>> {
     let tokens = tokenize(text);
     let block = app_block(text, &tokens, app_id)?;
@@ -224,10 +226,10 @@ pub fn launch_options(text: &str, app_id: &str) -> Result<Option<String>> {
         .map(|found| unescape(&text[found.value_start..found.value_end])))
 }
 
-/// Devuelve el texto con `LaunchOptions` cambiado.
+/// Returns the text with `LaunchOptions` changed.
 ///
-/// - `Some(valor)`: sustituye el valor, o añade la clave al final del bloque.
-/// - `None`: quita la clave. Si no existía, el texto queda igual.
+/// - `Some(value)`: replaces the value, or adds the key at the end of the block.
+/// - `None`: removes the key. If it didn't exist, the text is unchanged.
 pub fn set_launch_options(text: &str, app_id: &str, value: Option<&str>) -> Result<String> {
     let tokens = tokenize(text);
     let block = app_block(text, &tokens, app_id)?;
@@ -246,10 +248,10 @@ pub fn set_launch_options(text: &str, app_id: &str, value: Option<&str>) -> Resu
     }
 }
 
-/// Quita el par clave-valor, y su línea entera si no hay nada más en ella.
+/// Removes the key-value pair, and its whole line if there's nothing else on it.
 fn remove_pair(text: &str, found: &Found) -> String {
     let pair_start = found.key_quote;
-    let pair_end = found.value_end + 1; // tras la comilla de cierre del valor
+    let pair_end = found.value_end + 1; // after the value's closing quote
 
     let start_of_line = line_start(text, pair_start);
     let only_indent_before = text[start_of_line..pair_start]
@@ -270,12 +272,12 @@ fn remove_pair(text: &str, found: &Found) -> String {
     }
 }
 
-/// Añade `"LaunchOptions"  "valor"` justo antes de la llave que cierra el bloque,
-/// con la sangría de sus hermanos y el estilo de saltos de línea del fichero.
+/// Adds `"LaunchOptions"  "value"` right before the brace that closes the
+/// block, with the indentation of its siblings and the file's line-break style.
 fn insert_pair(text: &str, tokens: &[Token], block: &Block, value: &str) -> String {
     let close_pos = match tokens[block.close] {
         Token::Close(pos) => pos,
-        _ => unreachable!("el cierre de un bloque es siempre una llave"),
+        _ => unreachable!("a block's closing is always a brace"),
     };
     let nl = newline_style(text);
     let pair = format!("\"{KEY}\"\t\t\"{}\"", escape(value));
@@ -284,7 +286,7 @@ fn insert_pair(text: &str, tokens: &[Token], block: &Block, value: &str) -> Stri
     let indent_of_close = &text[start_of_line..close_pos];
 
     if indent_of_close.chars().all(|c| c == ' ' || c == '\t') {
-        // La `}` está sola en su línea: el par entra una sangría más adentro.
+        // The `}` is alone on its line: the pair goes one indent level deeper.
         let line = format!("{indent_of_close}\t{pair}{nl}");
         format!(
             "{}{}{}",
@@ -293,7 +295,7 @@ fn insert_pair(text: &str, tokens: &[Token], block: &Block, value: &str) -> Stri
             &text[start_of_line..]
         )
     } else {
-        // `{ ... }` en una sola línea: se inserta pegado a la llave.
+        // `{ ... }` on a single line: it's inserted right next to the brace.
         format!("{} {pair} {}", &text[..close_pos], &text[close_pos..])
     }
 }
@@ -302,25 +304,26 @@ fn insert_pair(text: &str, tokens: &[Token], block: &Block, value: &str) -> Stri
 mod tests {
     use super::*;
 
-    /// Estructura y sangría copiadas de un `localconfig.vdf` real, más un valor
-    /// suelto `"427520"` en otra sección, que no debe confundirse con el bloque.
+    /// Structure and indentation copied from a real `localconfig.vdf`, plus a
+    /// standalone value `"427520"` in another section, which shouldn't be
+    /// confused with the block.
     const SAMPLE: &str = "\"UserLocalConfigStore\"\n{\n\t\"Software\"\n\t{\n\t\t\"Valve\"\n\t\t{\n\t\t\t\"Steam\"\n\t\t\t{\n\t\t\t\t\"apps\"\n\t\t\t\t{\n\t\t\t\t\t\"427520\"\n\t\t\t\t\t{\n\t\t\t\t\t\t\"LastPlayed\"\t\t\"1790455585\"\n\t\t\t\t\t\t\"cloud\"\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"last_sync_state\"\t\t\"synchronized\"\n\t\t\t\t\t\t}\n\t\t\t\t\t\t\"playtime\"\t\t\"54904\"\n\t\t\t\t\t}\n\t\t\t\t\t\"999\"\n\t\t\t\t\t{\n\t\t\t\t\t\t\"LaunchOptions\"\t\t\"-otra-app\"\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n\t\"Otra\"\n\t{\n\t\t\"427520\"\t\t\"3800000004000000968771100100100100860600faee\"\n\t}\n}\n";
 
-    fn con_opciones(valor: &str) -> String {
+    fn with_options(value: &str) -> String {
         SAMPLE.replace(
             "\t\t\t\t\t\t\"playtime\"\t\t\"54904\"\n",
-            &format!("\t\t\t\t\t\t\"playtime\"\t\t\"54904\"\n\t\t\t\t\t\t\"LaunchOptions\"\t\t\"{valor}\"\n"),
+            &format!("\t\t\t\t\t\t\"playtime\"\t\t\"54904\"\n\t\t\t\t\t\t\"LaunchOptions\"\t\t\"{value}\"\n"),
         )
     }
 
     #[test]
-    fn sin_la_clave_no_hay_opciones() {
+    fn without_the_key_there_are_no_options() {
         assert_eq!(launch_options(SAMPLE, "427520").unwrap(), None);
     }
 
     #[test]
-    fn el_valor_suelto_de_otra_seccion_no_es_el_bloque() {
-        // Si se confundiera, `launch_options` daría error o leería otra cosa.
+    fn standalone_value_in_another_section_is_not_the_block() {
+        // If it got confused, `launch_options` would error out or read something else.
         assert!(launch_options(SAMPLE, "427520").is_ok());
         assert_eq!(
             launch_options(SAMPLE, "999").unwrap().as_deref(),
@@ -329,13 +332,13 @@ mod tests {
     }
 
     #[test]
-    fn una_aplicacion_ausente_es_un_error_claro() {
+    fn a_missing_application_is_a_clear_error() {
         let err = launch_options(SAMPLE, "12345").unwrap_err().to_string();
         assert!(err.contains("12345"), "{err}");
     }
 
     #[test]
-    fn anadir_la_clave_respeta_la_sangria_y_el_resto() {
+    fn adding_the_key_respects_indentation_and_the_rest() {
         let out =
             set_launch_options(SAMPLE, "427520", Some("\"C:\\a b\\x.exe\" %command%")).unwrap();
 
@@ -343,16 +346,16 @@ mod tests {
             launch_options(&out, "427520").unwrap().as_deref(),
             Some("\"C:\\a b\\x.exe\" %command%")
         );
-        // Sangría de sus hermanos (6 tabuladores) y escapado en el fichero.
+        // Indentation of its siblings (6 tabs) and escaping in the file.
         assert!(out.contains(
             "\t\t\t\t\t\t\"LaunchOptions\"\t\t\"\\\"C:\\\\a b\\\\x.exe\\\" %command%\"\n\t\t\t\t\t}\n\t\t\t\t\t\"999\""
         ));
-        // Todo lo demás, intacto: quitando la línea nueva se recupera el original.
+        // Everything else, intact: removing the new line recovers the original.
         assert_eq!(set_launch_options(&out, "427520", None).unwrap(), SAMPLE);
     }
 
     #[test]
-    fn no_toca_las_opciones_de_otras_aplicaciones() {
+    fn does_not_touch_other_applications_options() {
         let out = set_launch_options(SAMPLE, "427520", Some("%command%")).unwrap();
         assert_eq!(
             launch_options(&out, "999").unwrap().as_deref(),
@@ -361,122 +364,119 @@ mod tests {
     }
 
     #[test]
-    fn sustituir_un_valor_existente() {
-        let antes = con_opciones("-viejo");
-        let out = set_launch_options(&antes, "427520", Some("%command% -nuevo")).unwrap();
+    fn replacing_an_existing_value() {
+        let before = with_options("-old");
+        let out = set_launch_options(&before, "427520", Some("%command% -new")).unwrap();
         assert_eq!(
             launch_options(&out, "427520").unwrap().as_deref(),
-            Some("%command% -nuevo")
+            Some("%command% -new")
         );
-        assert_eq!(out.matches("LaunchOptions").count(), 2, "una por app");
+        assert_eq!(out.matches("LaunchOptions").count(), 2, "one per app");
     }
 
     #[test]
-    fn quitar_la_clave_borra_su_linea_entera() {
-        let antes = con_opciones("-viejo");
-        let out = set_launch_options(&antes, "427520", None).unwrap();
+    fn removing_the_key_deletes_its_whole_line() {
+        let before = with_options("-old");
+        let out = set_launch_options(&before, "427520", None).unwrap();
         assert_eq!(out, SAMPLE);
     }
 
     #[test]
-    fn quitar_una_clave_inexistente_no_cambia_nada() {
+    fn removing_a_nonexistent_key_changes_nothing() {
         assert_eq!(set_launch_options(SAMPLE, "427520", None).unwrap(), SAMPLE);
     }
 
     #[test]
-    fn el_escapado_es_reversible() {
-        let valor = "\"C:\\Program Files\\x.exe\" --a=\"b\" %command%";
-        assert_eq!(unescape(&escape(valor)), valor);
+    fn escaping_is_reversible() {
+        let value = "\"C:\\Program Files\\x.exe\" --a=\"b\" %command%";
+        assert_eq!(unescape(&escape(value)), value);
     }
 
     #[test]
-    fn respeta_los_saltos_de_linea_de_windows() {
+    fn respects_windows_line_breaks() {
         let crlf = SAMPLE.replace('\n', "\r\n");
         let out = set_launch_options(&crlf, "427520", Some("%command%")).unwrap();
-        assert!(!out.replace("\r\n", "").contains('\n'), "sin \\n sueltos");
+        assert!(!out.replace("\r\n", "").contains('\n'), "no stray \\n");
         assert!(out.contains("\"LaunchOptions\"\t\t\"%command%\"\r\n"));
         assert_eq!(set_launch_options(&out, "427520", None).unwrap(), crlf);
     }
 
     #[test]
-    fn ignora_una_clave_homonima_en_un_subbloque() {
-        let con_subbloque = SAMPLE.replace(
+    fn ignores_a_same_named_key_in_a_subblock() {
+        let with_subblock = SAMPLE.replace(
             "\"last_sync_state\"\t\t\"synchronized\"",
-            "\"LaunchOptions\"\t\t\"no-soy-yo\"",
+            "\"LaunchOptions\"\t\t\"not-me\"",
         );
-        assert_eq!(launch_options(&con_subbloque, "427520").unwrap(), None);
+        assert_eq!(launch_options(&with_subblock, "427520").unwrap(), None);
     }
 
     #[test]
-    fn un_valor_con_llaves_o_barras_no_rompe_el_analisis() {
-        let raro = con_opciones("--x={y} // z");
+    fn a_value_with_braces_or_slashes_does_not_break_parsing() {
+        let weird = with_options("--x={y} // z");
         assert_eq!(
-            launch_options(&raro, "427520").unwrap().as_deref(),
+            launch_options(&weird, "427520").unwrap().as_deref(),
             Some("--x={y} // z")
         );
         assert_eq!(
-            launch_options(&raro, "999").unwrap().as_deref(),
+            launch_options(&weird, "999").unwrap().as_deref(),
             Some("-otra-app")
         );
     }
 
     #[test]
-    fn el_texto_con_acentos_se_conserva() {
-        let con_acentos = SAMPLE.replace("\"Otra\"", "\"Ñandú ó\"");
-        let out = set_launch_options(&con_acentos, "427520", Some("%command%")).unwrap();
+    fn text_with_accents_is_preserved() {
+        let with_accents = SAMPLE.replace("\"Otra\"", "\"Ñandú ó\"");
+        let out = set_launch_options(&with_accents, "427520", Some("%command%")).unwrap();
         assert!(out.contains("\"Ñandú ó\""));
     }
 
-    /// Comprobación contra un fichero de verdad, que no cabe en el repositorio:
-    /// `STEAM_LOCALCONFIG=<ruta> cargo test -- --ignored fichero_real`. Sólo lee.
+    /// Check against a real file, which doesn't fit in the repository:
+    /// `STEAM_LOCALCONFIG=<path> cargo test -- --ignored fichero_real`. Read-only.
     #[test]
     #[ignore = "necesita un localconfig.vdf real (variable STEAM_LOCALCONFIG)"]
-    fn fichero_real_ida_y_vuelta() {
+    fn real_file_round_trip() {
         let Ok(path) = std::env::var("STEAM_LOCALCONFIG") else {
             return;
         };
         let original = std::fs::read_to_string(path).unwrap();
 
-        // El fichero puede traer ya una clave (p. ej. una línea pegada a mano).
-        let antes = launch_options(&original, "427520").unwrap();
-        let nuevo = "\"C:\\x y\\a.exe\" %command%";
+        // The file may already carry a key (e.g. a line pasted by hand).
+        let before = launch_options(&original, "427520").unwrap();
+        let new_value = "\"C:\\x y\\a.exe\" %command%";
 
-        let cambiado = set_launch_options(&original, "427520", Some(nuevo)).unwrap();
+        let changed = set_launch_options(&original, "427520", Some(new_value)).unwrap();
         assert_eq!(
-            launch_options(&cambiado, "427520").unwrap().as_deref(),
-            Some(nuevo)
+            launch_options(&changed, "427520").unwrap().as_deref(),
+            Some(new_value)
         );
 
-        // Un fichero de cientos de KB cambia en exactamente una línea: añade una
-        // si no había clave, y ninguna si sólo se sustituye el valor.
-        let esperadas = original.lines().count() + usize::from(antes.is_none());
-        let distintas: Vec<_> = original
+        // A file of hundreds of KB changes in exactly one line: it adds one
+        // if there was no key, and none if only the value is replaced.
+        let expected = original.lines().count() + usize::from(before.is_none());
+        let different: Vec<_> = original
             .lines()
-            .zip(cambiado.lines())
+            .zip(changed.lines())
             .filter(|(a, b)| a != b)
             .collect();
-        assert_eq!(cambiado.lines().count(), esperadas, "{distintas:?}");
-        assert!(distintas.len() <= 1, "{distintas:?}");
+        assert_eq!(changed.lines().count(), expected, "{different:?}");
+        assert!(different.len() <= 1, "{different:?}");
 
-        // Devolver el valor de antes deja el fichero byte a byte como estaba.
-        let vuelta = set_launch_options(&cambiado, "427520", antes.as_deref()).unwrap();
-        assert_eq!(
-            vuelta, original,
-            "la ida y vuelta debe devolver el original"
-        );
+        // Restoring the previous value leaves the file byte for byte as it was.
+        let back = set_launch_options(&changed, "427520", before.as_deref()).unwrap();
+        assert_eq!(back, original, "the round trip must return the original");
     }
 
     #[test]
-    fn un_bloque_en_una_sola_linea_tambien_se_edita() {
-        let plano = "\"apps\"\n{\n\t\"427520\" { \"playtime\" \"1\" }\n}\n";
-        let out = set_launch_options(plano, "427520", Some("%command%")).unwrap();
+    fn a_single_line_block_is_also_edited() {
+        let flat = "\"apps\"\n{\n\t\"427520\" { \"playtime\" \"1\" }\n}\n";
+        let out = set_launch_options(flat, "427520", Some("%command%")).unwrap();
         assert_eq!(
             launch_options(&out, "427520").unwrap().as_deref(),
             Some("%command%")
         );
-        // Sin sangría que conservar, basta con que la clave desaparezca.
-        let sin = set_launch_options(&out, "427520", None).unwrap();
-        assert_eq!(launch_options(&sin, "427520").unwrap(), None);
-        assert!(sin.contains("\"playtime\" \"1\""));
+        // With no indentation to preserve, it's enough for the key to disappear.
+        let without = set_launch_options(&out, "427520", None).unwrap();
+        assert_eq!(launch_options(&without, "427520").unwrap(), None);
+        assert!(without.contains("\"playtime\" \"1\""));
     }
 }

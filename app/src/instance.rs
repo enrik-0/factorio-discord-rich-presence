@@ -1,8 +1,8 @@
-//! Instancia única por sesión.
+//! Single instance per session.
 //!
-//! Con el autoarranque y la línea de Steam a la vez, cada arranque de Factorio
-//! lanzaría otra copia de la aplicación, todas publicando sobre la misma tarjeta
-//! de Discord. Un bloqueo con nombre deja pasar sólo a la primera.
+//! With autostart and the Steam launch line both active, every Factorio
+//! startup would launch another copy of the application, all publishing to
+//! the same Discord card. A named lock only lets the first one through.
 
 #[cfg(windows)]
 pub use windows_impl::acquire;
@@ -15,11 +15,11 @@ mod windows_impl {
     use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, HANDLE};
     use windows_sys::Win32::System::Threading::CreateMutexW;
 
-    /// Nombre del mutex. `Local\` lo limita a la sesión del usuario, de modo que
-    /// dos usuarios en el mismo equipo no se estorban.
+    /// Mutex name. `Local\` scopes it to the user's session, so two users on
+    /// the same machine don't get in each other's way.
     const MUTEX_NAME: &str = "Local\\FactorioDiscordRichPresence";
 
-    /// Mientras exista, esta copia es la única. Se libera al soltarlo.
+    /// While it exists, this copy is the only one. It's released when dropped.
     pub struct InstanceGuard(HANDLE);
 
     impl Drop for InstanceGuard {
@@ -32,7 +32,7 @@ mod windows_impl {
         }
     }
 
-    /// Toma la instancia única, o devuelve `None` si ya hay otra copia en marcha.
+    /// Takes the single instance, or returns `None` if another copy is already running.
     pub fn acquire() -> Option<InstanceGuard> {
         acquire_named(MUTEX_NAME)
     }
@@ -42,8 +42,9 @@ mod windows_impl {
 
         let handle = unsafe { CreateMutexW(std::ptr::null(), 0, wide.as_ptr()) };
         if handle.is_null() {
-            // Sin poder crear el mutex no se puede saber si hay otra copia. Mejor
-            // arrancar dos veces que no arrancar: la presencia es lo que se pide.
+            // Without being able to create the mutex, there's no way to know if
+            // another copy exists. Better to start twice than not start at all:
+            // presence is what's being asked for.
             return Some(InstanceGuard(handle));
         }
 
@@ -66,16 +67,16 @@ mod windows_impl {
         }
 
         #[test]
-        fn la_segunda_copia_no_puede_tomarla() {
-            let name = unique("segunda");
+        fn the_second_copy_cannot_acquire_it() {
+            let name = unique("second");
             let first = acquire_named(&name);
             assert!(first.is_some());
             assert!(acquire_named(&name).is_none());
         }
 
         #[test]
-        fn al_soltarla_otra_copia_puede_tomarla() {
-            let name = unique("soltar");
+        fn releasing_it_lets_another_copy_acquire_it() {
+            let name = unique("release");
             let first = acquire_named(&name);
             assert!(first.is_some());
             drop(first);
@@ -83,7 +84,7 @@ mod windows_impl {
         }
 
         #[test]
-        fn nombres_distintos_no_se_estorban() {
+        fn different_names_do_not_interfere_with_each_other() {
             let a = acquire_named(&unique("a"));
             let b = acquire_named(&unique("b"));
             assert!(a.is_some() && b.is_some());
@@ -91,10 +92,10 @@ mod windows_impl {
     }
 }
 
-/// En Unix no hay un objeto "mutex con nombre" del sistema: se usa un `flock`
-/// (advisory lock) sobre un fichero fijo en el directorio de datos de la app.
-/// Al morir el proceso el fichero queda ahí, pero el bloqueo se libera solo:
-/// lo mantiene el descriptor abierto, no el fichero en sí.
+/// On Unix there's no OS-level "named mutex" object: a `flock` (advisory
+/// lock) is used instead, on a fixed file in the app's data directory. The
+/// file stays behind after the process dies, but the lock releases on its
+/// own: it's held by the open descriptor, not by the file itself.
 #[cfg(unix)]
 mod unix_impl {
     use std::fs::{File, OpenOptions};
@@ -105,29 +106,31 @@ mod unix_impl {
 
     const LOCK_FILE_NAME: &str = "instance.lock";
 
-    /// Mientras exista, esta copia es la única. Se libera al soltarlo.
+    /// While it exists, this copy is the only one. It's released when dropped.
     ///
-    /// El `RwLock<File>` vive en el heap y se filtra deliberadamente (`Box::leak`)
-    /// para poder guardar el guard de escritura, que toma prestado de él, sin
-    /// recurrir a una estructura autorreferencial ni a código `unsafe`. El único
-    /// coste es no liberar esa asignación hasta que el proceso termine, momento
-    /// en el que el sistema operativo la recupera igualmente.
+    /// The `RwLock<File>` lives on the heap and is deliberately leaked
+    /// (`Box::leak`) so the write guard, which borrows from it, can be stored
+    /// without a self-referential struct or `unsafe` code. The only cost is
+    /// not freeing that allocation until the process exits, at which point
+    /// the OS reclaims it anyway.
     ///
-    /// `None` cuando no se pudo ni abrir el fichero ni bloquearlo por un motivo
-    /// ambiguo (permisos, etc.): igual que en Windows con un mutex nulo, se deja
-    /// pasar en vez de negar el arranque por algo que no se sabe interpretar.
+    /// `None` when the file could neither be opened nor locked for an
+    /// ambiguous reason (permissions, etc.): just like a null mutex on
+    /// Windows, it's let through instead of refusing to start over something
+    /// that can't be interpreted.
     #[allow(
         dead_code,
-        reason = "el campo sólo se sostiene por su Drop (libera el flock); nunca se lee"
+        reason = "the field is only held for its Drop (releases the flock); never read"
     )]
     pub struct InstanceGuard(Option<RwLockWriteGuard<'static, File>>);
 
-    /// Toma la instancia única, o devuelve `None` si ya hay otra copia en marcha.
+    /// Takes the single instance, or returns `None` if another copy is already running.
     pub fn acquire() -> Option<InstanceGuard> {
         let path = match lock_path() {
             Ok(path) => path,
-            // Sin ruta no se puede saber si hay otra copia. Mejor arrancar dos
-            // veces que no arrancar: la presencia es lo que se pide.
+            // Without a path there's no way to know if another copy exists.
+            // Better to start twice than not start at all: presence is what's
+            // being asked for.
             Err(_) => return Some(InstanceGuard(None)),
         };
         acquire_at(&path)
@@ -147,8 +150,8 @@ mod unix_impl {
         match lock.try_write() {
             Ok(guard) => Some(InstanceGuard(Some(guard))),
             Err(err) if err.kind() == io::ErrorKind::WouldBlock => None,
-            // Cualquier otro fallo (permisos, sistema de ficheros sin locking...)
-            // es tan ambiguo como no tener ruta: se deja pasar, igual que arriba.
+            // Any other failure (permissions, a filesystem without locking...)
+            // is as ambiguous as having no path: let through, same as above.
             Err(_) => Some(InstanceGuard(None)),
         }
     }
@@ -169,8 +172,8 @@ mod unix_impl {
         }
 
         #[test]
-        fn la_segunda_copia_no_puede_tomarla() {
-            let path = unique_path("segunda");
+        fn the_second_copy_cannot_acquire_it() {
+            let path = unique_path("second");
             let first = acquire_at(&path);
             assert!(first.is_some());
             assert!(acquire_at(&path).is_none());
@@ -179,8 +182,8 @@ mod unix_impl {
         }
 
         #[test]
-        fn al_soltarla_otra_copia_puede_tomarla() {
-            let path = unique_path("soltar");
+        fn releasing_it_lets_another_copy_acquire_it() {
+            let path = unique_path("release");
             let first = acquire_at(&path);
             assert!(first.is_some());
             drop(first);
@@ -189,7 +192,7 @@ mod unix_impl {
         }
 
         #[test]
-        fn rutas_distintas_no_se_estorban() {
+        fn different_paths_do_not_interfere_with_each_other() {
             let a = acquire_at(&unique_path("a"));
             let b = acquire_at(&unique_path("b"));
             assert!(a.is_some() && b.is_some());

@@ -1,25 +1,25 @@
-//! Reparto automático de los campos en los huecos de la tarjeta.
+//! Automatic distribution of fields into the card's slots.
 //!
-//! El jugador elige *qué* ve desde los ajustes del mod; el *dónde* es fijo, para
-//! que ninguna casilla pueda activarse sin que aparezca nada. Cada hueco junta
-//! sus campos activos en un orden de prioridad establecido:
+//! The player chooses *what* is shown from the mod's settings; the *where* is
+//! fixed, so that no checkbox can be turned on without anything appearing.
+//! Each slot gathers its active fields in an established priority order:
 //!
-//! - **línea 1** identidad de la partida: save · planeta · modpack
-//! - **línea 2** qué estás haciendo: investigación
-//! - **tooltip** contadores: tecnologías · evolución · cohetes · mods · modo …
+//! - **line 1** game identity: save · planet · modpack
+//! - **line 2** what you're doing: research
+//! - **tooltip** counters: technologies · evolution · rockets · mods · mode …
 
 use crate::config::Privacy;
 use crate::model::{GameState, TimerMode};
 use crate::presence::discord::unix_now;
 use crate::presence::spec::{ActivitySpec, MAX_TEXT_LEN};
 
-/// Separador entre campos dentro de un mismo hueco.
+/// Separator between fields within the same slot.
 pub const SEPARATOR: &str = " · ";
 
 pub fn build(state: &GameState, privacy: &Privacy) -> ActivitySpec {
     let display = state.display();
 
-    // --- línea 1: identidad ---
+    // --- line 1: identity ---
     let mut line1 = Vec::new();
     if display.save && privacy.share_save_name {
         if let Some(save) = &state.save_name {
@@ -37,7 +37,7 @@ pub fn build(state: &GameState, privacy: &Privacy) -> ActivitySpec {
         }
     }
 
-    // --- línea 2: actividad ---
+    // --- line 2: activity ---
     let mut line2 = Vec::new();
     if display.research {
         if let Some(research) = &state.research {
@@ -46,8 +46,8 @@ pub fn build(state: &GameState, privacy: &Privacy) -> ActivitySpec {
                     line2.push(format!("Researching {} ({}%)", prettify(label), percent));
                 }
                 (Some(label), None) => line2.push(format!("Researching {}", prettify(label))),
-                // Sin nada en cola la línea quedaría vacía; el contador de
-                // tecnologías es el respaldo natural.
+                // With nothing queued the line would be empty; the technology
+                // counter is the natural fallback.
                 (None, _) if display.tech_count => {
                     line2.push(format!("{}/{} technologies", research.done, research.total));
                 }
@@ -56,7 +56,7 @@ pub fn build(state: &GameState, privacy: &Privacy) -> ActivitySpec {
         }
     }
 
-    // --- tooltip: contadores ---
+    // --- tooltip: counters ---
     let mut tooltip = Vec::new();
     if display.tech_count {
         if let Some(research) = &state.research {
@@ -69,7 +69,7 @@ pub fn build(state: &GameState, privacy: &Privacy) -> ActivitySpec {
         }
     }
     if display.rockets {
-        // Se oculta mientras no haya lanzado ninguno: un "0 cohetes" no aporta.
+        // Hidden until at least one has been launched: a "0 rockets" adds nothing.
         if let Some(rockets) = state.rockets_launched.filter(|count| *count > 0) {
             tooltip.push(match rockets {
                 1 => "1 rocket".to_string(),
@@ -77,8 +77,8 @@ pub fn build(state: &GameState, privacy: &Privacy) -> ActivitySpec {
             });
         }
     }
-    // Estadísticas "meme": árboles, enemigos y muertes se ocultan a cero, igual
-    // que los cohetes — un "0 muertes" nada más empezar no aporta nada.
+    // "Meme" stats: trees, enemies and deaths are hidden at zero, just like
+    // the rockets — a "0 deaths" right at the start adds nothing.
     if display.trees {
         if let Some(count) = state.trees_razed.filter(|count| *count > 0) {
             tooltip.push(match count {
@@ -103,8 +103,8 @@ pub fn build(state: &GameState, privacy: &Privacy) -> ActivitySpec {
             });
         }
     }
-    // La contaminación y el AFK sí se muestran a cero: a diferencia de los de
-    // arriba, un valor bajo aquí no es menos interesante que uno alto.
+    // Pollution and AFK are shown even at zero: unlike the ones above, a low
+    // value here is no less interesting than a high one.
     if display.pollution {
         if let Some(pollution) = state.pollution_emitted {
             tooltip.push(format!("Pollution {}", format_count(pollution)));
@@ -128,8 +128,8 @@ pub fn build(state: &GameState, privacy: &Privacy) -> ActivitySpec {
             tooltip.push(name.clone());
         }
     }
-    // La dirección del servidor lleva doble llave: el ajuste del mod y el veto
-    // de la aplicación. Es el único campo que expone algo fuera de la partida.
+    // The server address has a double lock: the mod's setting and the
+    // application's veto. It's the only field that exposes anything outside the game.
     if display.server && privacy.share_server_address {
         if let Some(address) = &state.server_address {
             tooltip.push(address.clone());
@@ -139,7 +139,7 @@ pub fn build(state: &GameState, privacy: &Privacy) -> ActivitySpec {
     ActivitySpec {
         details: join_fitting(line1),
         state: join_fitting(line2),
-        large_image: None, // lo rellena el llamante desde la configuración
+        large_image: None, // filled in by the caller from the configuration
         large_text: join_fitting(tooltip),
         small_image: None,
         small_text: None,
@@ -148,12 +148,12 @@ pub fn build(state: &GameState, privacy: &Privacy) -> ActivitySpec {
     }
 }
 
-/// Instante Unix en que arrancó el cronómetro.
+/// Unix instant at which the timer started.
 ///
-/// El tiempo transcurrido lo midió el mod al escribir, así que se resta de *ese*
-/// instante y no del actual. Con `unix_now()` el resultado avanzaba con cada
-/// sondeo mientras el mod no reescribía, y el cronómetro de Discord se reiniciaba
-/// cada vez que la deriva superaba la tolerancia del deduplicador.
+/// The elapsed time was measured by the mod when it wrote, so it is subtracted
+/// from *that* instant and not the current one. With `unix_now()` the result
+/// kept advancing with every poll while the mod hadn't rewritten, and Discord's
+/// timer restarted every time the drift exceeded the deduplicator's tolerance.
 fn timer_start(state: &GameState, mode: TimerMode) -> Option<i64> {
     let elapsed = match mode {
         TimerMode::Save => state.playtime_secs(),
@@ -168,7 +168,7 @@ fn party_size(state: &GameState) -> Option<(i32, i32)> {
         return None;
     }
     let online = state.players_online? as i32;
-    // Factorio no impone un máximo de jugadores: se declara igual al conectado.
+    // Factorio doesn't impose a player maximum: it's declared equal to the connected count.
     Some((online, online))
 }
 
@@ -188,9 +188,9 @@ fn mode_label(state: &GameState) -> String {
     }
 }
 
-/// Formatea un número potencialmente grande de forma compacta: `950`, `1.2k`,
-/// `3.4M`. La contaminación y, en partidas largas, los árboles arrasados
-/// pueden llegar a cientos de miles.
+/// Formats a potentially large number compactly: `950`, `1.2k`,
+/// `3.4M`. Pollution and, in long games, razed trees
+/// can reach into the hundreds of thousands.
 fn format_count(n: f64) -> String {
     let n = n.round();
     if n.abs() < 1000.0 {
@@ -202,8 +202,8 @@ fn format_count(n: f64) -> String {
     }
 }
 
-/// `125` → `2 min`, `4200` → `1h 10min`. Sólo horas y minutos: los segundos no
-/// aportan nada para "cuánto llevas sin tocar nada".
+/// `125` → `2 min`, `4200` → `1h 10min`. Only hours and minutes: seconds add
+/// nothing for "how long has it been since you touched anything".
 fn format_afk(total_secs: i64) -> String {
     let minutes = total_secs / 60;
     if minutes < 60 {
@@ -213,10 +213,10 @@ fn format_afk(total_secs: i64) -> String {
     }
 }
 
-/// Une los campos y, si no caben, va soltando los de menor prioridad.
+/// Joins the fields and, if they don't fit, drops the lowest-priority ones.
 ///
-/// Recortar a mitad de palabra es peor que mostrar un campo menos, y como el
-/// orden es de prioridad, lo que se cae es siempre lo menos importante.
+/// Cutting off mid-word is worse than showing one field fewer, and since the
+/// order is by priority, what gets dropped is always the least important.
 pub fn join_fitting(parts: Vec<String>) -> Option<String> {
     let mut parts: Vec<String> = parts.into_iter().filter(|p| !p.trim().is_empty()).collect();
 
@@ -232,8 +232,8 @@ pub fn join_fitting(parts: Vec<String>) -> Option<String> {
 
 /// `electromagnetic-plant` → `Electromagnetic plant`.
 ///
-/// Sólo actúa sobre nombres crudos de prototipo: cuando llega la traducción del
-/// mod, el texto ya viene bien escrito y no contiene guiones que tocar.
+/// Only acts on raw prototype names: when the mod's translation arrives,
+/// the text already comes well-formed and has no hyphens to touch.
 pub fn prettify(raw: &str) -> String {
     if !raw.contains('-') && raw.chars().next().is_some_and(|c| c.is_uppercase()) {
         return raw.to_string();
@@ -251,8 +251,8 @@ mod tests {
     use super::*;
     use crate::model::{Display, Research, Surface};
 
-    /// Réplica del estado real de la partida de pruebas: Krastorio2, 240 mods,
-    /// Nauvis, investigando extracción de petróleo.
+    /// Replica of the real state of the test save: Krastorio2, 240 mods,
+    /// Nauvis, researching oil extraction.
     fn real_state() -> GameState {
         GameState {
             running: true,
@@ -292,14 +292,14 @@ mod tests {
     }
 
     #[test]
-    fn reparto_por_defecto_sobre_datos_reales() {
+    fn default_layout_over_real_data() {
         let spec = build(&real_state(), &Privacy::default());
         assert_eq!(spec.details.as_deref(), Some("claro · Nauvis"));
         assert_eq!(
             spec.state.as_deref(),
             Some("Researching Extracción de petróleo (88%)")
         );
-        // Sin cohetes (son 0) ni evolución ni mods, que van apagados de fábrica.
+        // No rockets (they're 0), no evolution, no mods, which are off by default.
         assert_eq!(
             spec.large_text.as_deref(),
             Some("41/1510 technologies · Singleplayer")
@@ -307,7 +307,7 @@ mod tests {
     }
 
     #[test]
-    fn activar_campos_los_hace_aparecer_en_su_hueco() {
+    fn enabling_fields_makes_them_appear_in_their_slot() {
         let spec = build(
             &with_display(Display {
                 overhaul: true,
@@ -325,7 +325,7 @@ mod tests {
     }
 
     #[test]
-    fn desactivar_campos_los_quita_sin_dejar_separadores() {
+    fn disabling_fields_removes_them_without_leaving_separators() {
         let spec = build(
             &with_display(Display {
                 save: false,
@@ -338,12 +338,12 @@ mod tests {
         assert_eq!(spec.details.as_deref(), Some("Nauvis"));
         assert_eq!(
             spec.large_text, None,
-            "el tooltip queda vacío, no con puntos"
+            "the tooltip is left empty, not full of dots"
         );
     }
 
     #[test]
-    fn los_cohetes_se_ocultan_mientras_sean_cero() {
+    fn rockets_are_hidden_while_zero() {
         let mut state = with_display(Display::default());
         assert!(!build(&state, &Privacy::default())
             .large_text
@@ -364,7 +364,7 @@ mod tests {
     }
 
     #[test]
-    fn arboles_enemigos_y_muertes_se_ocultan_mientras_sean_cero() {
+    fn trees_enemies_and_deaths_are_hidden_while_zero() {
         let display = Display {
             trees: true,
             enemies: true,
@@ -398,7 +398,7 @@ mod tests {
     }
 
     #[test]
-    fn contaminacion_y_afk_se_muestran_aunque_sean_cero() {
+    fn pollution_and_afk_show_even_when_zero() {
         let display = Display {
             pollution: true,
             afk: true,
@@ -415,7 +415,7 @@ mod tests {
     }
 
     #[test]
-    fn la_contaminacion_grande_se_formatea_de_forma_compacta() {
+    fn large_pollution_is_formatted_compactly() {
         let mut state = with_display(Display {
             pollution: true,
             ..Display::default()
@@ -426,18 +426,18 @@ mod tests {
     }
 
     #[test]
-    fn el_afk_pasa_a_horas_y_minutos() {
+    fn afk_rolls_over_to_hours_and_minutes() {
         let mut state = with_display(Display {
             afk: true,
             ..Display::default()
         });
-        state.afk_ticks = Some(70 * 60 * 60); // 70 minutos en ticks (60 t/s)
+        state.afk_ticks = Some(70 * 60 * 60); // 70 minutes in ticks (60 t/s)
         let text = build(&state, &Privacy::default()).large_text.unwrap();
         assert!(text.contains("AFK 1h 10min"), "{text}");
     }
 
     #[test]
-    fn el_cronometro_respeta_el_modo_elegido() {
+    fn the_timer_respects_the_chosen_mode() {
         let now = unix_now();
 
         let save = build(&with_display(Display::default()), &Privacy::default());
@@ -464,26 +464,26 @@ mod tests {
     }
 
     #[test]
-    fn el_inicio_del_cronometro_no_depende_de_cuando_se_sondea() {
-        // Regresión: el inicio se calculaba como `ahora - tiempo`, así que cada
-        // sondeo daba un valor distinto y Discord reiniciaba el cronómetro.
+    fn the_timer_start_does_not_depend_on_when_it_is_polled() {
+        // Regression: the start was calculated as `now - elapsed`, so every
+        // poll gave a different value and Discord kept restarting the timer.
         let mut state = with_display(Display {
             timer: TimerMode::Session,
             ..Display::default()
         });
         state.sampled_at = Some(1_700_000_000);
 
-        let primero = build(&state, &Privacy::default()).start_timestamp;
+        let first = build(&state, &Privacy::default()).start_timestamp;
         std::thread::sleep(std::time::Duration::from_millis(1_100));
-        let despues = build(&state, &Privacy::default()).start_timestamp;
+        let second = build(&state, &Privacy::default()).start_timestamp;
 
-        // 36000 ticks / 60 = 600 s de sesión.
-        assert_eq!(primero, Some(1_700_000_000 - 600));
-        assert_eq!(despues, primero, "mismos datos, mismo inicio");
+        // 36000 ticks / 60 = 600 s of session.
+        assert_eq!(first, Some(1_700_000_000 - 600));
+        assert_eq!(second, first, "same data, same start");
     }
 
     #[test]
-    fn la_aplicacion_puede_vetar_el_servidor_aunque_el_mod_lo_permita() {
+    fn the_app_can_veto_the_server_even_if_the_mod_allows_it() {
         let state = GameState {
             server_address: Some("203.0.113.7:34197".into()),
             ..with_display(Display {
@@ -492,16 +492,16 @@ mod tests {
             })
         };
 
-        let permitido = Privacy {
+        let allowed = Privacy {
             share_server_address: true,
             share_save_name: true,
         };
-        assert!(build(&state, &permitido)
+        assert!(build(&state, &allowed)
             .large_text
             .unwrap()
             .contains("203.0.113.7"));
 
-        // Por defecto la aplicación lo veta aunque el ajuste del mod diga que sí.
+        // By default the application vetoes it even if the mod's setting says yes.
         assert!(!build(&state, &Privacy::default())
             .large_text
             .unwrap()
@@ -509,7 +509,7 @@ mod tests {
     }
 
     #[test]
-    fn sin_investigacion_en_cola_la_linea_2_cae_al_contador() {
+    fn with_no_research_queued_line_2_falls_back_to_the_counter() {
         let mut state = with_display(Display::default());
         state.research = Some(Research {
             current: None,
@@ -525,8 +525,8 @@ mod tests {
     }
 
     #[test]
-    fn modo_degradado_usa_las_preferencias_de_fabrica() {
-        // Sin el mod no llega bloque `display`: sólo hay save y modo.
+    fn degraded_mode_uses_the_factory_preferences() {
+        // Without the mod no `display` block arrives: only save and mode are present.
         let state = GameState {
             running: true,
             save_name: Some("claro".into()),
@@ -538,12 +538,12 @@ mod tests {
         assert_eq!(spec.large_text.as_deref(), Some("Singleplayer"));
         assert_eq!(
             spec.start_timestamp, None,
-            "sin el mod no hay tiempo jugado"
+            "without the mod there's no playtime"
         );
     }
 
     #[test]
-    fn multijugador_muestra_cuantos_hay() {
+    fn multiplayer_shows_how_many_are_online() {
         let mut state = with_display(Display::default());
         state.multiplayer = Some(true);
         state.players_online = Some(4);
@@ -553,15 +553,15 @@ mod tests {
     }
 
     #[test]
-    fn un_hueco_demasiado_largo_suelta_lo_menos_importante() {
-        let largo = "x".repeat(100);
-        let resultado = join_fitting(vec![largo.clone(), largo.clone(), "cola".into()]).unwrap();
-        assert_eq!(resultado, largo, "sólo cabe el primero, y sin cortarlo");
-        assert!(resultado.chars().count() <= MAX_TEXT_LEN);
+    fn a_slot_that_is_too_long_drops_the_least_important_part() {
+        let long = "x".repeat(100);
+        let result = join_fitting(vec![long.clone(), long.clone(), "tail".into()]).unwrap();
+        assert_eq!(result, long, "only the first one fits, and uncut");
+        assert!(result.chars().count() <= MAX_TEXT_LEN);
     }
 
     #[test]
-    fn join_fitting_ignora_vacios() {
+    fn join_fitting_ignores_empty_parts() {
         assert_eq!(
             join_fitting(vec!["a".into(), "  ".into(), "b".into()]).as_deref(),
             Some("a · b")

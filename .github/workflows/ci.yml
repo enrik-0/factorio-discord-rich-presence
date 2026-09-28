@@ -30,9 +30,9 @@ jobs:
       - name: Tests
         run: cargo test --all
 
-  # Compila y prueba de verdad en Linux (no sólo `cargo check` cruzado): el
-  # icono de bandeja es de Windows (ver app/Cargo.toml), así que este runner
-  # no necesita GTK ni pkg-config, sólo el toolchain de Rust normal.
+  # Actually builds and tests on Linux (not just a cross-target `cargo
+  # check`): the tray icon is Windows-only (see app/Cargo.toml), so this
+  # runner doesn't need GTK or pkg-config, just the normal Rust toolchain.
   app-linux:
     name: App (Rust, Linux)
     runs-on: ubuntu-latest

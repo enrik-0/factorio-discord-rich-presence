@@ -1,8 +1,8 @@
-//! Lectura de `script-output/discord-rp/state.json`, el fichero que escribe el mod.
+//! Reads `script-output/discord-rp/state.json`, the file the mod writes.
 //!
-//! Se sondea en vez de vigilarse con un watcher del sistema de ficheros: Discord
-//! sólo acepta una actualización cada 15 s, así que un sondeo cada pocos segundos
-//! va sobrado y evita hilos, colas y antirrebotes.
+//! It's polled instead of watched with a filesystem watcher: Discord only
+//! accepts one update every 15 s, so polling every few seconds is more than
+//! enough and avoids threads, queues, and debouncing.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -11,25 +11,25 @@ use tracing::{debug, warn};
 
 use crate::model::{ModState, SUPPORTED_SCHEMA};
 
-/// Ruta relativa dentro de `script-output`, en componentes para que el separador
-/// sea el nativo. Debe coincidir con `OUTPUT_FILE` del mod.
+/// Relative path inside `script-output`, as components so the separator is
+/// native. Must match `OUTPUT_FILE` in the mod.
 pub const RELATIVE_PARTS: [&str; 2] = ["discord-rp", "state.json"];
 
-/// Si el fichero deja de actualizarse durante este tiempo, damos el estado por
-/// muerto: la partida está pausada, en el menú, o el mod se ha desactivado.
+/// If the file stops being updated for this long, the state is considered
+/// dead: the game is paused, in the menu, or the mod has been disabled.
 const STALE_AFTER: Duration = Duration::from_secs(20);
 
 pub struct ModFileWatcher {
     path: PathBuf,
     last_seq: Option<u64>,
-    /// Fecha del fichero, no de cuándo lo leímos nosotros.
+    /// The file's timestamp, not when we read it.
     ///
-    /// Usar nuestro propio reloj daba por fresco un fichero de hace horas: al
-    /// arrancar no hay historial con el que comparar, así que la primera lectura
-    /// parecía siempre reciente aunque Factorio llevara cerrado desde ayer.
+    /// Using our own clock made a file from hours ago look fresh: at startup
+    /// there's no history to compare against, so the first read always
+    /// looked recent even if Factorio had been closed since yesterday.
     modified: Option<SystemTime>,
     state: Option<ModState>,
-    /// Evita repetir el mismo aviso en cada sondeo.
+    /// Avoids repeating the same warning on every poll.
     warned_schema: bool,
 }
 
@@ -50,7 +50,7 @@ impl ModFileWatcher {
         &self.path
     }
 
-    /// Estado vigente, o `None` si no hay fichero o está rancio.
+    /// Current state, or `None` if there's no file or it's stale.
     pub fn state(&self) -> Option<&ModState> {
         if self.is_stale() {
             return None;
@@ -62,7 +62,7 @@ impl ModFileWatcher {
         let Some(modified) = self.modified else {
             return true;
         };
-        // Un reloj desajustado puede dar una fecha futura; ante la duda, fresco.
+        // A misaligned clock could give a future date; when in doubt, treat as fresh.
         modified.elapsed().unwrap_or(Duration::ZERO) > STALE_AFTER
     }
 
@@ -79,9 +79,9 @@ impl ModFileWatcher {
         let mut parsed: ModState = match serde_json::from_str(&text) {
             Ok(parsed) => parsed,
             Err(err) => {
-                // Leer a la vez que el mod escribe da JSON truncado. No es un
-                // error: el siguiente sondeo lo pillará entero.
-                debug!(%err, "state.json ilegible (probable escritura a medias)");
+                // Reading while the mod is writing produces truncated JSON.
+                // It's not an error: the next poll will catch it whole.
+                debug!(%err, "state.json unreadable (likely a partial write)");
                 return;
             }
         };
@@ -89,9 +89,9 @@ impl ModFileWatcher {
         if parsed.schema != SUPPORTED_SCHEMA {
             if !self.warned_schema {
                 warn!(
-                    encontrado = parsed.schema,
-                    soportado = SUPPORTED_SCHEMA,
-                    "el mod usa un formato distinto; se ignoran sus datos. Actualiza la aplicación."
+                    found = parsed.schema,
+                    supported = SUPPORTED_SCHEMA,
+                    "the mod is using a different format; its data is being ignored. Update the app."
                 );
                 self.warned_schema = true;
             }
@@ -100,8 +100,8 @@ impl ModFileWatcher {
         }
         self.warned_schema = false;
 
-        // Los tiempos del JSON describen el momento en que el mod escribió, no el
-        // de esta lectura: la fecha del fichero es el ancla del cronómetro.
+        // The timestamps in the JSON describe when the mod wrote it, not
+        // when this read happened: the file's timestamp is the clock's anchor.
         parsed.sampled_at = self
             .modified
             .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
@@ -141,7 +141,7 @@ mod tests {
     }
 
     #[test]
-    fn lee_un_estado_valido() {
+    fn reads_a_valid_state() {
         let dir = tempdir("valido");
         let mut watcher = watcher_with(&dir, &payload(1, SUPPORTED_SCHEMA));
         watcher.poll();
@@ -149,7 +149,7 @@ mod tests {
     }
 
     #[test]
-    fn rechaza_un_schema_desconocido() {
+    fn rejects_an_unknown_schema() {
         let dir = tempdir("schema");
         let mut watcher = watcher_with(&dir, &payload(1, 999));
         watcher.poll();
@@ -157,13 +157,13 @@ mod tests {
     }
 
     #[test]
-    fn json_truncado_no_borra_el_estado_anterior() {
+    fn truncated_json_does_not_clear_the_previous_state() {
         let dir = tempdir("truncado");
         let mut watcher = watcher_with(&dir, &payload(1, SUPPORTED_SCHEMA));
         watcher.poll();
         assert!(watcher.state().is_some());
 
-        // Simula una lectura pillando al mod a media escritura.
+        // Simulates a read catching the mod mid-write.
         let full = RELATIVE_PARTS
             .iter()
             .fold(dir.clone(), |acc, p| acc.join(p));
@@ -176,12 +176,12 @@ mod tests {
         assert_eq!(
             watcher.state().map(|s| s.seq),
             Some(1),
-            "debe conservar el último estado bueno"
+            "should keep the last good state"
         );
     }
 
     #[test]
-    fn fichero_ausente_no_produce_estado() {
+    fn missing_file_produces_no_state() {
         let dir = tempdir("ausente");
         let mut watcher = ModFileWatcher::new(&dir);
         watcher.poll();
@@ -189,10 +189,10 @@ mod tests {
     }
 
     #[test]
-    fn un_fichero_viejo_se_descarta_aunque_sea_la_primera_lectura() {
-        // Ocurre al arrancar la aplicación con Factorio recién abierto: el
-        // state.json de la sesión anterior sigue en disco, y sin historial
-        // propio parecería recién escrito.
+    fn an_old_file_is_discarded_even_on_the_first_read() {
+        // This happens when starting the app with Factorio freshly open: the
+        // previous session's state.json is still on disk, and without its
+        // own history it would look freshly written.
         let dir = tempdir("viejo");
         let mut watcher = watcher_with(&dir, &payload(1, SUPPORTED_SCHEMA));
 
@@ -205,12 +205,12 @@ mod tests {
         watcher.poll();
         assert!(
             watcher.state().is_none(),
-            "un fichero de hace una hora no describe la partida actual"
+            "a file from an hour ago doesn't describe the current game"
         );
     }
 
     #[test]
-    fn la_fecha_del_fichero_es_el_ancla_del_cronometro() {
+    fn the_file_date_is_the_timer_anchor() {
         let dir = tempdir("ancla");
         let mut watcher = watcher_with(&dir, &payload(1, SUPPORTED_SCHEMA));
 
@@ -226,7 +226,7 @@ mod tests {
     }
 
     #[test]
-    fn un_fichero_recien_escrito_se_acepta() {
+    fn a_freshly_written_file_is_accepted() {
         let dir = tempdir("reciente");
         let mut watcher = watcher_with(&dir, &payload(1, SUPPORTED_SCHEMA));
         watcher.poll();

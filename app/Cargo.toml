@@ -1,6 +1,6 @@
 [package]
 name = "factorio-discord-rp"
-description = "Discord Rich Presence para Factorio 2.1"
+description = "Discord Rich Presence para Factorio 2.0+"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -21,11 +21,11 @@ toml = "1.1.4"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
-# El registro, el portapapeles, la ventana de consola y el icono de bandeja
-# (tray-icon/muda necesitan GTK en Linux, que este proyecto no compromete a
-# tener disponible) son de Windows; en otras plataformas no hace falta ni
-# intentar resolver estos crates. La versión "mínimo viable" en Linux corre
-# en modo consola (--console), sin bandeja.
+# The registry, clipboard, console window, and tray icon (tray-icon/muda need
+# GTK on Linux, which this project doesn't commit to having available) are
+# Windows-specific; other platforms don't even need to resolve these crates.
+# The "minimum viable" version on Linux runs in console mode (--console), with
+# no tray.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = [
     "Win32_Foundation",
@@ -39,7 +39,7 @@ windows-sys = { version = "0.61.2", features = [
 ] }
 tray-icon = "0.24.2"
 
-# El bloqueo de instancia única en Unix se hace con flock sobre un fichero.
+# Single-instance locking on Unix is done with flock on a file.
 [target.'cfg(unix)'.dependencies]
 fd-lock = "*"
 

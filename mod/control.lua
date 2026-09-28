@@ -1,15 +1,15 @@
--- Discord Rich Presence para Factorio 2.1
+-- Discord Rich Presence for Factorio 2.0+
 --
--- El mod sólo produce datos: escribe un JSON en script-output/discord-rp/.
--- La aplicación acompañante lo lee y habla con Discord. El sandbox de Factorio
--- no permite sockets ni HTTP, así que el fichero es el único canal posible.
+-- The mod only produces data: it writes a JSON file under script-output/discord-rp/.
+-- The companion app reads it and talks to Discord. Factorio's sandbox doesn't
+-- allow sockets or HTTP, so the file is the only channel available.
 
 local collect = require("collect")
 
 local SCHEMA = 2
 local OUTPUT_FILE = "discord-rp/state.json"
 
--- Overhauls reconocidos, en orden de prioridad: si conviven varios gana el primero.
+-- Recognized overhauls, in priority order: if several are active, the first one wins.
 local OVERHAULS = {
   "pypostprocessing",
   "space-exploration",
@@ -25,15 +25,15 @@ for name, value in pairs(defines.controllers) do
 end
 
 --------------------------------------------------------------------------------
--- Estado persistente
+-- Persistent state
 --------------------------------------------------------------------------------
 
--- Inicio de la sesión de cada jugador, en `game.ticks_played`.
+-- Each player's session start, in `game.ticks_played`.
 --
--- No va en `storage`: la sesión es "desde que se cargó la partida", y lo que se
--- guarda sobrevive al cierre y acabaría contando horas de sesiones anteriores.
--- Al ser local, se vacía en cada carga. Sólo sirve para escribir el fichero de
--- estado, así que no influye en la simulación.
+-- Not stored in `storage`: the session is "since the save was loaded", and
+-- what's saved survives a close and would end up counting hours from previous
+-- sessions. Being local, it clears on every load. Only used to write the
+-- state file, so it doesn't affect the simulation.
 local session_start = {}
 
 local function init_storage()
@@ -42,11 +42,11 @@ local function init_storage()
   storage.translations = storage.translations or {}
   storage.requested = storage.requested or {}
   storage.pending = storage.pending or {}
-  storage.session_start = nil -- heredado de la 0.2.1; ya no se guarda
+  storage.session_start = nil -- inherited from 0.2.1; no longer stored
 end
 
 --------------------------------------------------------------------------------
--- Caché del conteo de tecnologías
+-- Technology count cache
 --------------------------------------------------------------------------------
 
 local function recount(force)
@@ -62,12 +62,13 @@ local function recount_all()
 end
 
 --------------------------------------------------------------------------------
--- Traducción de los nombres de tecnología
+-- Technology name translation
 --------------------------------------------------------------------------------
 
--- `localised_name` es un LocalisedString: Lua no puede convertirlo a texto por sí
--- mismo. `request_translation` lo resuelve en el idioma del cliente y devuelve el
--- resultado por evento. Así funciona también con tecnologías de cualquier mod.
+-- `localised_name` is a LocalisedString: Lua can't turn it into text on its
+-- own. `request_translation` resolves it in the client's language and
+-- returns the result via an event. This is also how it works for
+-- technologies from any mod.
 local function ensure_translation(player, tech)
   local requested = storage.requested[player.index]
   if not requested then
@@ -93,7 +94,7 @@ script.on_event(defines.events.on_string_translated, function(event)
   storage.pending[event.id] = nil
 
   if not event.translated then
-    -- Sin traducción disponible; se reintentará si el jugador vuelve a entrar.
+    -- No translation available; it'll be retried if the player rejoins.
     local requested = storage.requested[info.player_index]
     if requested then
       requested[info.tech_name] = nil
@@ -110,7 +111,7 @@ script.on_event(defines.events.on_string_translated, function(event)
 end)
 
 --------------------------------------------------------------------------------
--- Escritura periódica
+-- Periodic write
 --------------------------------------------------------------------------------
 
 local function detect_overhaul()
@@ -131,8 +132,8 @@ local function count_mods()
   return count
 end
 
--- Preferencias de visualización: qué campos quiere ver este jugador en la
--- tarjeta. La aplicación las obedece; el hueco de cada uno es fijo.
+-- Display preferences: which fields this player wants to see on the card.
+-- The app obeys them; each field's slot is fixed.
 local function build_display(settings)
   return {
     save = settings["drp-show-save"].value,
@@ -155,9 +156,9 @@ local function build_display(settings)
   }
 end
 
--- Bajas y muertes de una fuerza, calculadas como mucho una vez por escritura:
--- si varios jugadores comparten fuerza, la segunda consulta reutiliza la
--- primera en vez de repetir el recorrido de todas las superficies.
+-- A force's kills and deaths, computed at most once per write: if several
+-- players share a force, the second lookup reuses the first instead of
+-- repeating the walk over every surface.
 local function combat_stats_of(force, cache)
   local cached = cache[force.index]
   if cached then
@@ -178,7 +179,7 @@ local function write_state()
   storage.seq = storage.seq + 1
   local mod_count = count_mods()
   local overhaul = detect_overhaul()
-  -- No es por fuerza (ver collect.total_pollution): se calcula una sola vez.
+  -- Not per force (see collect.total_pollution): computed just once.
   local pollution = collect.total_pollution()
   local combat_cache = {}
 
@@ -192,8 +193,8 @@ local function write_state()
         ensure_translation(player, current)
       end
 
-      -- Al cargar una partida ya empezada no llega `on_player_joined_game`, así
-      -- que la sesión arranca la primera vez que el mod ve al jugador.
+      -- `on_player_joined_game` doesn't fire when loading an already-started
+      -- save, so the session starts the first time the mod sees the player.
       if not session_start[player.index] then
         session_start[player.index] = game.ticks_played
       end
@@ -212,15 +213,15 @@ local function write_state()
         pollution = pollution,
       })
 
-      -- `for_player` hace que cada cliente escriba sólo su propio fichero:
-      -- sin esto, en multijugador todos los peers escribirían lo mismo.
+      -- `for_player` makes each client write only its own file: without
+      -- this, every peer in multiplayer would write the same thing.
       helpers.write_file(OUTPUT_FILE, helpers.table_to_json(payload), false, player.index)
     end
   end
 end
 
 --------------------------------------------------------------------------------
--- Registro del temporizador
+-- Timer registration
 --------------------------------------------------------------------------------
 
 local function register_timer()
@@ -230,7 +231,7 @@ local function register_timer()
 end
 
 --------------------------------------------------------------------------------
--- Ciclo de vida
+-- Lifecycle
 --------------------------------------------------------------------------------
 
 script.on_init(function()
@@ -245,7 +246,7 @@ end)
 
 script.on_configuration_changed(function()
   init_storage()
-  -- Añadir o quitar mods cambia el árbol de tecnologías entero.
+  -- Adding or removing mods changes the whole technology tree.
   recount_all()
   register_timer()
 end)
@@ -282,9 +283,9 @@ script.on_event(defines.events.on_player_removed, function(event)
   session_start[event.player_index] = nil
 end)
 
--- `player.online_time` NO sirve para el tiempo de sesión: acumula todas las
--- sesiones de ese jugador en la partida. La sesión real es cuánto ha avanzado
--- el reloj de la partida desde que entró.
+-- `player.online_time` does NOT work for session time: it accumulates every
+-- one of that player's sessions in the save. The real session is how much
+-- the game clock has advanced since they joined.
 script.on_event(defines.events.on_player_joined_game, function(event)
   session_start[event.player_index] = game.ticks_played
 end)
@@ -294,11 +295,11 @@ script.on_event(defines.events.on_player_left_game, function(event)
 end)
 
 --------------------------------------------------------------------------------
--- Diagnóstico
+-- Diagnostics
 --------------------------------------------------------------------------------
 
--- Sirve para contrastar el conteo contra el árbol de tecnologías del juego, que
--- es la única forma de confirmar que el criterio de tecnologías infinitas acierta.
+-- Useful to cross-check the count against the game's own technology tree,
+-- the only way to confirm the infinite-technology filter is correct.
 commands.add_command("drp-debug", { "drp.debug-help" }, function(event)
   local player = game.get_player(event.player_index)
   if not player then
@@ -307,22 +308,22 @@ commands.add_command("drp-debug", { "drp.debug-help" }, function(event)
   local counts = storage.tech[player.force.index] or { done = 0, total = 0 }
   local surface = player.physical_surface
   player.print(string.format(
-    "[Discord RP] tecnologías %d/%d | superficie %s | planeta %s | plataforma %s | ticks_played %d | seq %d",
+    "[Discord RP] technologies %d/%d | surface %s | planet %s | platform %s | ticks_played %d | seq %d",
     counts.done,
     counts.total,
     surface.name,
     surface.planet and surface.planet.name or "-",
-    surface.platform and "sí" or "no",
+    surface.platform and "yes" or "no",
     game.ticks_played,
     storage.seq or 0
   ))
-  player.print("[Discord RP] fichero: script-output/" .. OUTPUT_FILE)
+  player.print("[Discord RP] file: script-output/" .. OUTPUT_FILE)
 
-  -- Sin caché, recalculado al vuelo: sirve para contrastar contra el propio
-  -- juego (F4 > kill_count_statistics, o el panel de "Producción" > Bajas).
+  -- Uncached, recomputed on the spot: useful to cross-check against the game
+  -- itself (F4 > kill_count_statistics, or the "Production" panel > Losses).
   local enemies, trees, deaths = collect.combat_stats(player.force)
   player.print(string.format(
-    "[Discord RP] enemigos %d | árboles %d | muertes %d | contaminación %.0f | afk %d ticks",
+    "[Discord RP] enemies %d | trees %d | deaths %d | pollution %.0f | afk %d ticks",
     enemies,
     trees,
     deaths,

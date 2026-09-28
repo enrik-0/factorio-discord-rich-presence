@@ -1,4 +1,4 @@
-//! Bucle principal: sondea las fuentes, fusiona, renderiza y publica.
+//! Main loop: polls the sources, merges, renders, and publishes.
 
 use std::time::{Duration, Instant};
 
@@ -13,29 +13,29 @@ use crate::presence::DiscordSink;
 use crate::sources::{logfile, LogWatcher, ModFileWatcher, ProcessWatcher};
 use crate::status::Shared;
 
-/// Cadencia del bucle. Discord sólo acepta una actualización cada 15 s, así que
-/// sondear cada 2 s va de sobra y mantiene el consumo en nada.
+/// Loop cadence. Discord only accepts one update every 15 s, so polling every
+/// 2 s is more than enough and keeps resource use negligible.
 const TICK: Duration = Duration::from_secs(2);
 
-/// Trocito en el que se parte la espera, para que cerrar desde la bandeja no
-/// tarde un ciclo entero en notarse.
+/// The chunk size the wait is split into, so closing from the tray isn't
+/// noticed a whole cycle late.
 const SHUTDOWN_POLL: Duration = Duration::from_millis(200);
 
-/// Con `exit_with_game` la aplicación pide su propio cierre cuando Factorio, ya
-/// visto, deja de estar en ejecución (modo lanzador).
+/// With `exit_with_game` the application requests its own shutdown when
+/// Factorio, once seen, stops running (launcher mode).
 pub fn run(config: &Config, shared: &Shared, exit_with_game: bool) -> Result<()> {
     let application_id = config.application_id()?;
     let data_dir = config.factorio_data_dir()?;
     let script_output = data_dir.join("script-output");
 
-    info!(datos = %data_dir.display(), "vigilando Factorio");
+    info!(data = %data_dir.display(), "watching Factorio");
 
     let mut sink = DiscordSink::new(application_id)?;
     let mut process = ProcessWatcher::new();
     let mut log = LogWatcher::new(logfile::default_log_path(&data_dir));
     let mut modfile = ModFileWatcher::new(&script_output);
 
-    debug!(fichero = %modfile.path().display(), "fichero de estado del mod");
+    debug!(file = %modfile.path().display(), "mod state file");
 
     let mut was_running = false;
     let mut lifetime = exit_with_game.then(|| GameLifetime::new(Instant::now()));
@@ -45,16 +45,16 @@ pub fn run(config: &Config, shared: &Shared, exit_with_game: bool) -> Result<()>
         let running = process.is_running();
 
         if running {
-            // Sólo tocamos disco mientras el juego está vivo.
+            // Disk is only touched while the game is alive.
             log.poll();
             modfile.poll();
         }
 
         if running != was_running {
             if running {
-                info!("Factorio en ejecución");
+                info!("Factorio running");
             } else {
-                info!("Factorio cerrado; limpiando el estado de Discord");
+                info!("Factorio closed; clearing Discord state");
                 sink.clear();
                 shared.update(|status| status.headline = None);
             }
@@ -63,7 +63,7 @@ pub fn run(config: &Config, shared: &Shared, exit_with_game: bool) -> Result<()>
 
         if let Some(lifetime) = lifetime.as_mut() {
             if lifetime.should_exit(running, Instant::now()) {
-                info!("Factorio ya no está en ejecución; cerrando la aplicación");
+                info!("Factorio is no longer running; closing the application");
                 shared.request_shutdown();
             }
         }
@@ -82,14 +82,14 @@ pub fn run(config: &Config, shared: &Shared, exit_with_game: bool) -> Result<()>
                         status.headline = (!headline.is_empty()).then_some(headline);
                     });
                     info!(
-                        detalles = spec.details.as_deref().unwrap_or("-"),
-                        estado = spec.state.as_deref().unwrap_or("-"),
-                        modo = if state.has_mod_data() {
-                            "completo"
+                        details = spec.details.as_deref().unwrap_or("-"),
+                        state = spec.state.as_deref().unwrap_or("-"),
+                        mode = if state.has_mod_data() {
+                            "complete"
                         } else {
-                            "degradado (sin mod)"
+                            "degraded (no mod)"
                         },
-                        "estado actualizado"
+                        "state updated"
                     );
                 }
             }
@@ -103,12 +103,12 @@ pub fn run(config: &Config, shared: &Shared, exit_with_game: bool) -> Result<()>
         sleep_until_shutdown(shared, TICK);
     }
 
-    info!("cerrando");
+    info!("closing");
     sink.clear();
     Ok(())
 }
 
-/// Duerme el ciclo, pero comprobando de vez en cuando si toca cerrar.
+/// Sleeps the cycle, but checking now and then whether it's time to close.
 fn sleep_until_shutdown(shared: &Shared, total: Duration) {
     let mut left = total;
     while left > Duration::ZERO && !shared.is_shutdown() {
@@ -118,7 +118,7 @@ fn sleep_until_shutdown(shared: &Shared, total: Duration) {
     }
 }
 
-/// Diagnóstico: imprime lo que ven las fuentes ahora mismo, sin tocar Discord.
+/// Diagnostics: prints what the sources currently see, without touching Discord.
 pub fn dump(config: &Config) -> Result<()> {
     let data_dir = config.factorio_data_dir()?;
     let script_output = data_dir.join("script-output");
@@ -131,49 +131,46 @@ pub fn dump(config: &Config) -> Result<()> {
     log.poll();
     modfile.poll();
 
-    // Se muestran los hechos crudos de cada fuente además del estado fusionado:
-    // con Factorio cerrado la fusión queda vacía a propósito, y aun así interesa
-    // ver si el log se está interpretando bien.
-    println!("--- fuentes ---");
-    println!("Proceso de Factorio  {}", yes_no(process.is_running()));
+    // The raw facts from each source are shown alongside the merged state:
+    // with Factorio closed the merge is intentionally empty, and it's still
+    // useful to see whether the log is being interpreted correctly.
+    println!("--- sources ---");
+    println!("Factorio process     {}", yes_no(process.is_running()));
     println!("Log                  {}", log_path_hint(&data_dir));
     println!("  save               {}", opt(&log.facts().save_name));
-    println!("  versión            {}", opt(&log.facts().game_version));
+    println!("  version            {}", opt(&log.facts().game_version));
     println!(
-        "  multijugador       {}",
+        "  multiplayer        {}",
         log.facts()
             .multiplayer
             .map(yes_no)
-            .unwrap_or_else(|| "desconocido".into())
+            .unwrap_or_else(|| "unknown".into())
     );
-    println!("Fichero del mod      {}", modfile.path().display());
-    println!("  presente           {}", yes_no(modfile.path().is_file()));
+    println!("Mod file             {}", modfile.path().display());
+    println!("  present            {}", yes_no(modfile.path().is_file()));
     println!();
 
     let state = merge(process.is_running(), log.facts(), modfile.state());
 
-    println!("--- estado fusionado ---");
-    println!("Proceso de Factorio  {}", yes_no(state.running));
+    println!("--- merged state ---");
+    println!("Factorio process     {}", yes_no(state.running));
     println!(
-        "Datos del mod        {}",
+        "Mod data             {}",
         if state.has_mod_data() {
-            "sí"
+            "yes"
         } else {
-            "no (modo degradado)"
+            "no (degraded mode)"
         }
     );
-    println!("Fichero del mod      {}", modfile.path().display());
+    println!("Mod file             {}", modfile.path().display());
     println!("Save                 {}", opt(&state.save_name));
-    println!("Versión              {}", opt(&state.game_version));
+    println!("Version              {}", opt(&state.game_version));
     println!(
-        "Multijugador         {}",
-        state
-            .multiplayer
-            .map(yes_no)
-            .unwrap_or("desconocido".into())
+        "Multiplayer          {}",
+        state.multiplayer.map(yes_no).unwrap_or("unknown".into())
     );
     println!(
-        "Superficie           {}",
+        "Surface              {}",
         state
             .surface
             .as_ref()
@@ -181,7 +178,7 @@ pub fn dump(config: &Config) -> Result<()> {
             .unwrap_or_else(|| "-".into())
     );
     println!(
-        "Investigación        {}",
+        "Research             {}",
         state
             .research
             .as_ref()
@@ -189,12 +186,12 @@ pub fn dump(config: &Config) -> Result<()> {
                 "{}/{} · {}",
                 r.done,
                 r.total,
-                r.label().unwrap_or("nada en cola")
+                r.label().unwrap_or("nothing queued")
             ))
             .unwrap_or_else(|| "-".into())
     );
     println!(
-        "Tiempo jugado        {}",
+        "Playtime             {}",
         state
             .playtime_secs()
             .map(format_duration)
@@ -204,20 +201,20 @@ pub fn dump(config: &Config) -> Result<()> {
     println!();
     match render(&state, config) {
         Some(spec) => {
-            println!("Se publicaría:");
-            println!("  línea 1     {}", opt(&spec.details));
-            println!("  línea 2     {}", opt(&spec.state));
-            println!("  icono       {}", opt(&spec.large_image));
+            println!("Would publish:");
+            println!("  line 1      {}", opt(&spec.details));
+            println!("  line 2      {}", opt(&spec.state));
+            println!("  icon        {}", opt(&spec.large_image));
             println!("  tooltip     {}", opt(&spec.large_text));
         }
-        None => println!("No se publicaría nada (Factorio no está en ejecución)."),
+        None => println!("Nothing would be published (Factorio is not running)."),
     }
 
     Ok(())
 }
 
 fn yes_no(value: bool) -> String {
-    if value { "sí" } else { "no" }.to_string()
+    if value { "yes" } else { "no" }.to_string()
 }
 
 fn opt(value: &Option<String>) -> String {

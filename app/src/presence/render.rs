@@ -1,15 +1,15 @@
-//! Construcción de la tarjeta de Discord.
+//! Building the Discord card.
 //!
-//! Hay dos caminos:
+//! There are two paths:
 //!
-//! - **automático** (por defecto): el jugador elige los campos desde los ajustes
-//!   del mod, dentro del juego, y [`super::layout`] los reparte en huecos fijos.
-//! - **plantillas** (avanzado): si `config.toml` define una sección
-//!   `[templates]`, manda ella y se ignoran las casillas del mod.
+//! - **automatic** (default): the player chooses the fields from the mod's
+//!   settings, in-game, and [`super::layout`] distributes them into fixed slots.
+//! - **templates** (advanced): if `config.toml` defines a `[templates]`
+//!   section, it takes over and the mod's checkboxes are ignored.
 //!
-//! Los dos no pueden ser autoridad a la vez: si las casillas eligieran los
-//! campos pero la plantilla decidiera el sitio, activar una casilla que la
-//! plantilla no menciona no haría absolutamente nada.
+//! The two can't be in charge at the same time: if the checkboxes chose the
+//! fields but the template decided the placement, turning on a checkbox the
+//! template doesn't mention would do absolutely nothing.
 
 use std::collections::HashMap;
 
@@ -23,8 +23,8 @@ pub fn render(state: &GameState, config: &Config) -> Option<ActivitySpec> {
         return None;
     }
 
-    // El reparto automático resuelve además cronómetro y party, que no dependen
-    // del modo elegido.
+    // The automatic layout also resolves the timer and party, which don't depend
+    // on the chosen mode.
     let base = layout::build(state, &config.privacy);
 
     let mut spec = match &config.templates {
@@ -45,7 +45,7 @@ pub fn render(state: &GameState, config: &Config) -> Option<ActivitySpec> {
 }
 
 //------------------------------------------------------------------------------
-// Modo plantillas
+// Template mode
 //------------------------------------------------------------------------------
 
 fn from_template(template: &str, state: &GameState, privacy: &Privacy) -> Option<String> {
@@ -92,7 +92,7 @@ fn build_vars(state: &GameState, privacy: &Privacy) -> HashMap<&'static str, Str
             ((evolution * 100.0).round() as i64).to_string(),
         );
     }
-    // Los contadores a cero se omiten, para que su bloque desaparezca solo.
+    // Counters at zero are omitted, so their block disappears on its own.
     if let Some(rockets) = state.rockets_launched.filter(|count| *count > 0) {
         vars.insert("rockets", rockets.to_string());
     }
@@ -123,7 +123,7 @@ fn build_vars(state: &GameState, privacy: &Privacy) -> HashMap<&'static str, Str
     vars
 }
 
-/// Sustituye `{variable}` y elimina los bloques cuyas variables falten.
+/// Substitutes `{variable}` and removes blocks whose variables are missing.
 fn render_template(template: &str, vars: &HashMap<&'static str, String>) -> Option<String> {
     let mut blocks = Vec::new();
 
@@ -141,7 +141,7 @@ fn render_template(template: &str, vars: &HashMap<&'static str, String>) -> Opti
     Some(truncate(&blocks.join(layout::SEPARATOR)))
 }
 
-/// Devuelve `None` si el bloque referencia una variable que no tiene valor.
+/// Returns `None` if the block references a variable that has no value.
 fn render_block(block: &str, vars: &HashMap<&'static str, String>) -> Option<String> {
     let mut output = String::with_capacity(block.len());
     let mut rest = block;
@@ -199,7 +199,7 @@ mod tests {
     }
 
     #[test]
-    fn sustituye_variables() {
+    fn substitutes_variables() {
         assert_eq!(
             render_template("Researching {research} ({research_pct}%)", &vars()).as_deref(),
             Some("Researching Planta electromagnética (64%)")
@@ -207,43 +207,43 @@ mod tests {
     }
 
     #[test]
-    fn descarta_el_bloque_con_variable_ausente() {
+    fn discards_the_block_with_a_missing_variable() {
         let mut partial = vars();
         partial.remove("planet");
         assert_eq!(
             render_template("{planet} · {save}", &partial).as_deref(),
             Some("Cohetes S.A."),
-            "no debe quedar un separador colgando"
+            "no dangling separator should be left behind"
         );
     }
 
     #[test]
-    fn sin_ninguna_variable_devuelve_none() {
+    fn with_no_variable_at_all_it_returns_none() {
         assert_eq!(render_template("{planet} · {save}", &HashMap::new()), None);
     }
 
     #[test]
-    fn el_texto_literal_sobrevive_sin_variables() {
+    fn literal_text_survives_with_no_variables() {
         assert_eq!(
-            render_template("En Factorio", &HashMap::new()).as_deref(),
-            Some("En Factorio")
+            render_template("In Factorio", &HashMap::new()).as_deref(),
+            Some("In Factorio")
         );
     }
 
     #[test]
-    fn sin_proceso_no_se_renderiza_nada() {
+    fn nothing_renders_without_a_running_process() {
         assert!(render(&GameState::default(), &Config::default()).is_none());
     }
 
     #[test]
-    fn sin_plantillas_manda_el_reparto_automatico() {
+    fn with_no_templates_the_automatic_layout_takes_over() {
         let spec = render(&state(), &Config::default()).unwrap();
         assert_eq!(spec.details.as_deref(), Some("claro · Nauvis"));
         assert_eq!(spec.large_image.as_deref(), Some("factorio"));
     }
 
     #[test]
-    fn con_plantillas_mandan_ellas() {
+    fn with_templates_they_take_over() {
         let config = Config {
             templates: Some(Templates {
                 details: "{save} en {planet}".into(),
@@ -259,7 +259,7 @@ mod tests {
     }
 
     #[test]
-    fn un_asset_vacio_desactiva_la_imagen() {
+    fn an_empty_asset_disables_the_image() {
         let config = Config {
             large_image: "   ".into(),
             ..Config::default()

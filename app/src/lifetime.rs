@@ -1,18 +1,19 @@
-//! Cuándo debe cerrarse la aplicación en modo lanzador.
+//! When the application should close in launcher mode.
 //!
-//! En modo lanzador la aplicación nace con el juego y muere con él. No se ata al
-//! proceso hijo que ella misma arranca: cuando Factorio se lanza fuera de Steam,
-//! el primer `factorio.exe` sale enseguida y Steam lo relanza con otro PID. Por
-//! eso la decisión se toma sobre "¿hay algún factorio.exe?", con un margen.
+//! In launcher mode the application is born with the game and dies with it.
+//! It doesn't attach to the child process it starts itself: when Factorio is
+//! launched outside of Steam, the first `factorio.exe` exits right away and
+//! Steam relaunches it with a different PID. That's why the decision is based
+//! on "is there any factorio.exe?", with a grace margin.
 
 use std::time::{Duration, Instant};
 
-/// Margen desde que desaparece Factorio hasta cerrar. Cubre el relanzamiento de
-/// Steam y los cierres que dejan el proceso vivo unos segundos.
+/// Grace period from when Factorio disappears until closing. Covers Steam's
+/// relaunch and shutdowns that leave the process alive for a few seconds.
 pub const GRACE: Duration = Duration::from_secs(10);
 
-/// Espera máxima a que Factorio aparezca. Pasado este tiempo sin verlo nunca,
-/// el arranque ha fallado y no tiene sentido quedarse residente.
+/// Maximum wait for Factorio to appear. After this time without ever seeing
+/// it, startup has failed and there's no point staying resident.
 pub const STARTUP_TIMEOUT: Duration = Duration::from_secs(90);
 
 pub struct GameLifetime {
@@ -30,7 +31,7 @@ impl GameLifetime {
         }
     }
 
-    /// ¿Toca cerrar? Se llama en cada sondeo con el estado actual del proceso.
+    /// Time to close? Called on every poll with the process's current state.
     pub fn should_exit(&mut self, running: bool, now: Instant) -> bool {
         if running {
             self.seen = true;
@@ -56,7 +57,7 @@ mod tests {
     }
 
     #[test]
-    fn mientras_el_juego_corre_no_se_cierra() {
+    fn while_the_game_is_running_it_does_not_close() {
         let t0 = Instant::now();
         let mut life = GameLifetime::new(t0);
         assert!(!life.should_exit(true, t0));
@@ -64,7 +65,7 @@ mod tests {
     }
 
     #[test]
-    fn al_cerrarse_el_juego_espera_el_margen_antes_de_salir() {
+    fn when_the_game_closes_it_waits_the_grace_period_before_exiting() {
         let t0 = Instant::now();
         let mut life = GameLifetime::new(t0);
         assert!(!life.should_exit(true, t0));
@@ -75,22 +76,22 @@ mod tests {
     }
 
     #[test]
-    fn el_relanzamiento_de_steam_no_cierra_la_aplicacion() {
-        // El primer proceso desaparece y otro nuevo aparece dentro del margen.
+    fn steams_relaunch_does_not_close_the_application() {
+        // The first process disappears and a new one appears within the grace period.
         let t0 = Instant::now();
         let mut life = GameLifetime::new(t0);
         assert!(!life.should_exit(true, t0));
         assert!(!life.should_exit(false, t0 + secs(2)));
         assert!(!life.should_exit(true, t0 + secs(4)));
 
-        // El margen se reinicia: una nueva ausencia cuenta desde cero.
+        // The grace period resets: a new absence counts from zero.
         assert!(!life.should_exit(false, t0 + secs(5)));
         assert!(!life.should_exit(false, t0 + secs(5) + GRACE - secs(1)));
         assert!(life.should_exit(false, t0 + secs(5) + GRACE));
     }
 
     #[test]
-    fn si_el_juego_nunca_aparece_se_rinde_al_agotar_el_plazo() {
+    fn if_the_game_never_appears_it_gives_up_once_the_timeout_elapses() {
         let t0 = Instant::now();
         let mut life = GameLifetime::new(t0);
         assert!(!life.should_exit(false, t0 + STARTUP_TIMEOUT - secs(1)));
@@ -98,9 +99,9 @@ mod tests {
     }
 
     #[test]
-    fn el_plazo_de_arranque_no_aplica_si_el_juego_ya_se_vio() {
-        // Un juego visto y cerrado usa el margen corto, muy por debajo del plazo
-        // de arranque de 90 s.
+    fn the_startup_timeout_does_not_apply_if_the_game_was_already_seen() {
+        // A game that was seen and then closed uses the short grace period,
+        // well under the 90 s startup timeout.
         let t0 = Instant::now();
         let mut life = GameLifetime::new(t0);
         assert!(!life.should_exit(true, t0 + secs(1)));

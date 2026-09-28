@@ -1,11 +1,11 @@
-//! Instalación guiada: deja Steam configurado sin que el usuario toque rutas.
+//! Guided installation: sets up Steam without the user touching paths.
 //!
-//! La aplicación funciona de lanzador (`"…\factorio-discord-rp.exe" %command%`),
-//! pero pegar esa línea a mano es engorroso. Este módulo la calcula con las rutas
-//! reales y, si se le deja, la escribe en la configuración de Steam.
+//! The application acts as a launcher (`"…\factorio-discord-rp.exe" %command%`),
+//! but pasting that line by hand is tedious. This module computes it with the
+//! real paths and, if allowed to, writes it into Steam's configuration.
 //!
-//! La lógica vive aquí y no en el instalador para poder comprobarla con tests: el
-//! asistente sólo llama a la aplicación y mira su código de salida.
+//! The logic lives here and not in the installer so it can be tested: the
+//! wizard only calls the application and checks its exit code.
 
 mod clipboard;
 mod options;
@@ -21,35 +21,35 @@ use anyhow::{Context, Result};
 use crate::paths;
 use steam::{Steam, FACTORIO_APP_ID};
 
-/// Cuánto se espera a que Steam termine de cerrarse.
+/// How long to wait for Steam to finish closing.
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Options {
-    /// Cerrar Steam si está abierto, en vez de negarse.
+    /// Close Steam if it's open, instead of refusing.
     pub close_steam: bool,
-    /// Reabrir Steam después, sólo si lo hemos cerrado nosotros.
+    /// Reopen Steam afterwards, only if we closed it.
     pub restart_steam: bool,
 }
 
-/// Qué se quiere hacer con la configuración de Steam.
+/// What to do with Steam's configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
     Install,
     Uninstall,
 }
 
-/// Por qué ha fallado, con un código de salida distinto para que el instalador
-/// decida qué le dice al usuario sin tener que interpretar textos.
+/// Why it failed, with a distinct exit code so the installer can decide what
+/// to tell the user without having to parse text.
 #[derive(Debug)]
 pub enum Failure {
-    /// Steam está abierto y no se ha permitido cerrarlo. Código 10.
+    /// Steam is open and closing it wasn't allowed. Code 10.
     SteamRunning,
-    /// No hay Steam, o Factorio no está instalado en él. Código 11.
+    /// There's no Steam, or Factorio isn't installed on it. Code 11.
     NotFound(String),
-    /// No se pudo leer o escribir la configuración. Código 12.
+    /// The configuration couldn't be read or written. Code 12.
     Write(String),
-    /// Cualquier otro error. Código 1.
+    /// Any other error. Code 1.
     Other(String),
 }
 
@@ -69,7 +69,7 @@ impl fmt::Display for Failure {
         match self {
             Failure::SteamRunning => write!(
                 f,
-                "Steam está abierto: hay que cerrarlo para cambiar su configuración"
+                "Steam is open: it has to be closed to change its configuration"
             ),
             Failure::NotFound(msg) | Failure::Write(msg) | Failure::Other(msg) => {
                 write!(f, "{msg}")
@@ -93,14 +93,15 @@ fn exe() -> Result<String> {
 fn read_options(steam: &Steam) -> Result<Option<String>> {
     let path = steam.localconfig();
     let text = std::fs::read_to_string(&path)
-        .with_context(|| format!("no se pudo leer {}", path.display()))?;
+        .with_context(|| format!("could not read {}", path.display()))?;
     vdf::launch_options(&text, FACTORIO_APP_ID)
 }
 
-/// La línea completa que hay que tener en las opciones de Steam.
+/// The complete line that needs to be in Steam's options.
 ///
-/// Si se puede leer lo que ya hay, se calcula respetándolo; si no, es la línea
-/// simple. Es lo que se le enseña al usuario que prefiere pegarla a mano.
+/// If what's already there can be read, it's computed respecting it; if not,
+/// it's the simple line. This is what's shown to the user who prefers to
+/// paste it by hand.
 fn resolved_line() -> Result<String> {
     let exe = exe()?;
     let existing = steam::locate()
@@ -111,62 +112,60 @@ fn resolved_line() -> Result<String> {
     Ok(options::install(&existing, &exe))
 }
 
-/// Informe de lo detectado más la línea para pegar, copiada al portapapeles.
+/// Report of what was detected plus the line to paste, copied to the clipboard.
 pub fn report() -> Outcome {
     let exe = exe()?;
-    println!("Aplicación:        {exe}");
+    println!("App:               {exe}");
 
     match steam::locate() {
         Ok(steam) => {
             println!("Steam:             {}", steam.root.display());
-            println!("Cuenta activa:     {}", steam.account);
+            println!("Active account:    {}", steam.account);
             println!(
                 "Factorio:          {}",
                 if steam.factorio_installed() {
-                    "instalado"
+                    "installed"
                 } else {
-                    "NO aparece instalado"
+                    "does NOT appear to be installed"
                 }
             );
             println!(
-                "Steam abierto:     {}",
+                "Steam open:        {}",
                 if steam::is_running() {
-                    "sí (para aplicar el cambio hay que cerrarlo)"
+                    "yes (it has to be closed to apply the change)"
                 } else {
                     "no"
                 }
             );
             match read_options(&steam) {
-                Ok(Some(current)) => println!("Opciones actuales: {current}"),
-                Ok(None) => println!("Opciones actuales: (ninguna)"),
-                Err(err) => println!("Opciones actuales: no se pudieron leer ({err:#})"),
+                Ok(Some(current)) => println!("Current options:   {current}"),
+                Ok(None) => println!("Current options:   (none)"),
+                Err(err) => println!("Current options:   could not be read ({err:#})"),
             }
         }
-        Err(err) => println!("Steam:             no localizado ({err:#})"),
+        Err(err) => println!("Steam:             not found ({err:#})"),
     }
 
     let line = resolved_line()?;
     println!();
-    println!(
-        "Línea completa para pegar en Steam → Factorio → Propiedades → Opciones de lanzamiento:"
-    );
+    println!("Full line to paste into Steam → Factorio → Properties → Launch Options:");
     println!();
     println!("{line}");
     println!();
     match clipboard::copy(&line) {
-        Ok(()) => println!("(Copiada al portapapeles.)"),
-        Err(err) => println!("(No se pudo copiar al portapapeles: {err:#})"),
+        Ok(()) => println!("(Copied to the clipboard.)"),
+        Err(err) => println!("(Could not copy to the clipboard: {err:#})"),
     }
     Ok(())
 }
 
-/// Imprime únicamente la línea, sin nada más: la consume el instalador.
+/// Prints only the line, nothing else: consumed by the installer.
 pub fn print_command() -> Outcome {
     println!("{}", resolved_line()?);
     Ok(())
 }
 
-/// Copia la línea al portapapeles y la imprime.
+/// Copies the line to the clipboard and prints it.
 pub fn copy_command() -> Outcome {
     let line = resolved_line()?;
     clipboard::copy(&line)?;
@@ -174,17 +173,17 @@ pub fn copy_command() -> Outcome {
     Ok(())
 }
 
-/// Activa o desactiva el arranque con Windows.
+/// Enables or disables startup with Windows.
 pub fn set_autostart(enabled: bool) -> Outcome {
     crate::autostart::set_enabled(enabled)?;
     Ok(())
 }
 
-/// Lo que cambiaría en la configuración de Steam.
+/// What would change in Steam's configuration.
 struct Plan {
     before: Option<String>,
     after: Option<String>,
-    /// Contenido completo del fichero ya modificado.
+    /// Full content of the already-modified file.
     text: String,
 }
 
@@ -202,7 +201,7 @@ fn plan(text: &str, exe: &str, action: Action) -> Result<Plan> {
         Action::Install => options::install(&current, exe),
         Action::Uninstall => options::uninstall(&current, exe),
     };
-    // Vacío = no queda nada que guardar: se borra la clave en vez de dejarla en blanco.
+    // Empty = nothing left worth saving: the key is deleted instead of left blank.
     let after = (!target.is_empty()).then_some(target);
 
     let text = if after == before {
@@ -225,48 +224,48 @@ fn locate_steam() -> Result<Steam, Failure> {
 fn read_config(steam: &Steam) -> Result<String, Failure> {
     let path = steam.localconfig();
     std::fs::read_to_string(&path)
-        .map_err(|err| Failure::Write(format!("no se pudo leer {}: {err}", path.display())))
+        .map_err(|err| Failure::Write(format!("could not read {}: {err}", path.display())))
 }
 
-/// Muestra qué cambiaría, sin escribir nada.
+/// Shows what would change, without writing anything.
 pub fn dry_run(action: Action) -> Outcome {
     let exe = exe()?;
     let steam = locate_steam()?;
     let text = read_config(&steam)?;
     let plan = plan(&text, &exe, action)?;
 
-    println!("Fichero:  {}", steam.localconfig().display());
+    println!("File:     {}", steam.localconfig().display());
     println!(
         "Steam:    {}",
         if steam::is_running() {
-            "abierto (para aplicarlo de verdad habría que cerrarlo)"
+            "open (it would need to be closed to actually apply this)"
         } else {
-            "cerrado"
+            "closed"
         }
     );
     println!(
-        "Antes:    {}",
-        plan.before.as_deref().unwrap_or("(sin opciones)")
+        "Before:   {}",
+        plan.before.as_deref().unwrap_or("(no options)")
     );
     println!(
-        "Después:  {}",
-        plan.after.as_deref().unwrap_or("(sin opciones)")
+        "After:    {}",
+        plan.after.as_deref().unwrap_or("(no options)")
     );
     if plan.changes_anything() {
-        println!("Se haría copia de seguridad del fichero y se cambiaría sólo esa clave.");
+        println!("A backup of the file would be made and only that key would change.");
     } else {
-        println!("No habría ningún cambio.");
+        println!("Nothing would change.");
     }
-    println!("No se ha escrito nada (--dry-run).");
+    println!("Nothing was written (--dry-run).");
     Ok(())
 }
 
-/// Pone la aplicación en las opciones de lanzamiento de Factorio.
+/// Puts the application in Factorio's launch options.
 pub fn apply(opts: &Options) -> Outcome {
     change(opts, Action::Install)
 }
 
-/// Quita la aplicación de las opciones de lanzamiento, dejando las demás.
+/// Removes the application from the launch options, leaving the rest as is.
 pub fn uninstall(opts: &Options) -> Outcome {
     change(opts, Action::Uninstall)
 }
@@ -277,17 +276,17 @@ fn change(opts: &Options, action: Action) -> Outcome {
 
     if action == Action::Install && !steam.factorio_installed() {
         return Err(Failure::NotFound(
-            "Factorio no aparece instalado en ninguna biblioteca de Steam".into(),
+            "Factorio does not appear to be installed in any Steam library".into(),
         ));
     }
 
-    // Steam reescribe localconfig.vdf mientras corre: editarlo abierto se pierde.
+    // Steam rewrites localconfig.vdf while it's running: editing it while open gets lost.
     let mut closed_by_us = false;
     if steam::is_running() {
         if !opts.close_steam {
             return Err(Failure::SteamRunning);
         }
-        println!("Cerrando Steam…");
+        println!("Closing Steam…");
         steam
             .shutdown(SHUTDOWN_TIMEOUT)
             .map_err(|err| Failure::Other(format!("{err:#}")))?;
@@ -296,11 +295,11 @@ fn change(opts: &Options, action: Action) -> Outcome {
 
     let result = rewrite(&steam, &exe, action);
 
-    // Se reabre aunque el cambio haya fallado: no hay que dejar a nadie sin Steam.
+    // Reopened even if the change failed: nobody should be left without Steam.
     if closed_by_us && opts.restart_steam {
-        println!("Reabriendo Steam…");
+        println!("Reopening Steam…");
         if let Err(err) = steam.start() {
-            eprintln!("aviso: no se pudo reabrir Steam: {err:#}");
+            eprintln!("warning: could not reopen Steam: {err:#}");
         }
     }
 
@@ -316,8 +315,8 @@ fn rewrite(steam: &Steam, exe: &str, action: Action) -> Outcome {
         println!(
             "{}",
             match action {
-                Action::Install => "Ya estaba configurado: no hay nada que cambiar.",
-                Action::Uninstall => "No había nada que quitar.",
+                Action::Install => "It was already configured: nothing to change.",
+                Action::Uninstall => "There was nothing to remove.",
             }
         );
         return Ok(());
@@ -326,24 +325,24 @@ fn rewrite(steam: &Steam, exe: &str, action: Action) -> Outcome {
     let backup = backup_path(&path);
     std::fs::copy(&path, &backup).map_err(|err| {
         Failure::Write(format!(
-            "no se pudo hacer la copia de seguridad {}: {err}",
+            "could not create backup {}: {err}",
             backup.display()
         ))
     })?;
-    println!("Copia de seguridad: {}", backup.display());
+    println!("Backup: {}", backup.display());
 
     write_atomically(&path, &plan.text)
-        .map_err(|err| Failure::Write(format!("no se pudo escribir {}: {err}", path.display())))?;
+        .map_err(|err| Failure::Write(format!("could not write {}: {err}", path.display())))?;
 
     println!(
-        "Opciones de lanzamiento de Factorio: {}",
-        plan.after.as_deref().unwrap_or("(sin opciones)")
+        "Factorio launch options: {}",
+        plan.after.as_deref().unwrap_or("(no options)")
     );
     Ok(())
 }
 
-/// Escribe en un fichero temporal y lo renombra encima: si algo falla a medias,
-/// el original queda intacto en vez de truncado.
+/// Writes to a temporary file and renames it over the original: if something
+/// fails midway, the original stays intact instead of truncated.
 fn write_atomically(path: &Path, text: &str) -> std::io::Result<()> {
     let temp = path.with_extension("vdf.tmp");
     std::fs::write(&temp, text)?;
@@ -358,13 +357,13 @@ fn backup_path(path: &Path) -> std::path::PathBuf {
     path.with_extension(format!("vdf.bak-{}", utc_stamp(secs)))
 }
 
-/// `AAAAMMDD-HHMMSS` en UTC, sin depender de una biblioteca de fechas.
+/// `YYYYMMDD-HHMMSS` in UTC, without depending on a date library.
 fn utc_stamp(secs: u64) -> String {
     let days = (secs / 86_400) as i64;
     let rest = secs % 86_400;
     let (hour, minute, second) = (rest / 3600, (rest % 3600) / 60, rest % 60);
 
-    // Días desde 1970 → fecha civil (algoritmo de Howard Hinnant).
+    // Days since 1970 → civil date (Howard Hinnant's algorithm).
     let z = days + 719_468;
     let era = z.div_euclid(146_097);
     let day_of_era = z.rem_euclid(146_097);
@@ -390,7 +389,7 @@ mod tests {
     const EXE: &str =
         r"C:\Users\villa\AppData\Local\Programs\Factorio Discord RP\factorio-discord-rp.exe";
 
-    /// Fichero mínimo con la estructura real: `apps` → Factorio.
+    /// Minimal file with the real structure: `apps` → Factorio.
     fn sample() -> String {
         format!(
             "\"UserLocalConfigStore\"\n{{\n\t\"apps\"\n\t{{\n\t\t\"{FACTORIO_APP_ID}\"\n\t\t{{\n\t\t\t\"playtime\"\t\t\"54904\"\n\t\t}}\n\t}}\n}}\n"
@@ -398,53 +397,53 @@ mod tests {
     }
 
     #[test]
-    fn instalar_y_desinstalar_dejan_el_fichero_como_estaba() {
+    fn installing_and_uninstalling_leaves_the_file_as_it_was() {
         let original = sample();
 
-        let instalado = plan(&original, EXE, Action::Install).unwrap();
-        assert!(instalado.changes_anything());
+        let installed = plan(&original, EXE, Action::Install).unwrap();
+        assert!(installed.changes_anything());
         assert_eq!(
-            instalado.after.as_deref(),
+            installed.after.as_deref(),
             Some(format!("\"{EXE}\" %command%").as_str())
         );
 
-        let quitado = plan(&instalado.text, EXE, Action::Uninstall).unwrap();
-        assert_eq!(quitado.after, None);
-        assert_eq!(quitado.text, original);
+        let removed = plan(&installed.text, EXE, Action::Uninstall).unwrap();
+        assert_eq!(removed.after, None);
+        assert_eq!(removed.text, original);
     }
 
     #[test]
-    fn instalar_dos_veces_no_cambia_nada_la_segunda() {
-        let una = plan(&sample(), EXE, Action::Install).unwrap();
-        let dos = plan(&una.text, EXE, Action::Install).unwrap();
-        assert!(!dos.changes_anything());
-        assert_eq!(dos.text, una.text);
+    fn installing_twice_changes_nothing_the_second_time() {
+        let one = plan(&sample(), EXE, Action::Install).unwrap();
+        let two = plan(&one.text, EXE, Action::Install).unwrap();
+        assert!(!two.changes_anything());
+        assert_eq!(two.text, one.text);
     }
 
     #[test]
-    fn desinstalar_sin_estar_instalada_no_cambia_nada() {
+    fn uninstalling_when_not_installed_changes_nothing() {
         let plan = plan(&sample(), EXE, Action::Uninstall).unwrap();
         assert!(!plan.changes_anything());
         assert_eq!(plan.text, sample());
     }
 
     #[test]
-    fn respeta_las_opciones_que_ya_tenia_el_usuario() {
-        let con_opciones =
+    fn respects_options_the_user_already_had() {
+        let with_options =
             vdf::set_launch_options(&sample(), FACTORIO_APP_ID, Some("%command% -x")).unwrap();
 
-        let instalado = plan(&con_opciones, EXE, Action::Install).unwrap();
+        let installed = plan(&with_options, EXE, Action::Install).unwrap();
         assert_eq!(
-            instalado.after.as_deref(),
+            installed.after.as_deref(),
             Some(format!("\"{EXE}\" %command% -x").as_str())
         );
 
-        let quitado = plan(&instalado.text, EXE, Action::Uninstall).unwrap();
-        assert_eq!(quitado.after.as_deref(), Some("%command% -x"));
+        let removed = plan(&installed.text, EXE, Action::Uninstall).unwrap();
+        assert_eq!(removed.after.as_deref(), Some("%command% -x"));
     }
 
     #[test]
-    fn los_codigos_de_salida_son_los_documentados() {
+    fn the_exit_codes_are_the_documented_ones() {
         assert_eq!(Failure::SteamRunning.exit_code(), 10);
         assert_eq!(Failure::NotFound(String::new()).exit_code(), 11);
         assert_eq!(Failure::Write(String::new()).exit_code(), 12);
@@ -452,17 +451,17 @@ mod tests {
     }
 
     #[test]
-    fn el_sello_de_la_copia_es_una_fecha_legible() {
+    fn the_backup_stamp_is_a_readable_date() {
         assert_eq!(utc_stamp(0), "19700101-000000");
         assert_eq!(utc_stamp(1_000_000_000), "20010909-014640");
-        // 29 de febrero de un año bisiesto.
+        // February 29 of a leap year.
         assert_eq!(utc_stamp(951_782_400), "20000229-000000");
     }
 
     #[test]
-    fn la_copia_lleva_el_sello_en_el_nombre() {
-        let copia = backup_path(Path::new(r"C:\Steam\userdata\1\config\localconfig.vdf"));
-        let nombre = copia.file_name().unwrap().to_string_lossy().into_owned();
-        assert!(nombre.starts_with("localconfig.vdf.bak-"), "{nombre}");
+    fn the_backup_carries_the_stamp_in_its_name() {
+        let backup = backup_path(Path::new(r"C:\Steam\userdata\1\config\localconfig.vdf"));
+        let name = backup.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.starts_with("localconfig.vdf.bak-"), "{name}");
     }
 }

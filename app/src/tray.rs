@@ -1,12 +1,11 @@
-//! Icono en la bandeja del sistema.
+//! System tray icon.
 //!
-//! Sin él, la aplicación en modo autoarranque sería un proceso invisible sin
-//! forma de saber si funciona ni de cerrarlo. El icono es lo que hace aceptable
-//! el autoarranque, no un añadido decorativo.
+//! Without it, the app in autostart mode would be an invisible process with
+//! no way to know whether it's working or to close it. The icon is what
+//! makes autostart acceptable, not a decorative extra.
 //!
-//! El icono de bandeja de Windows necesita una cola de mensajes en el hilo
-//! principal, así que la vigilancia se va a un hilo trabajador y aquí se queda
-//! el bucle de mensajes.
+//! Windows' tray icon needs a message queue on the main thread, so watching
+//! moves to a worker thread and the message loop stays here.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -20,12 +19,12 @@ use crate::autostart;
 use crate::config::Config;
 use crate::status::Shared;
 
-/// Cada cuánto se refresca el texto emergente del icono.
+/// How often the icon's tooltip text refreshes.
 const REFRESH: Duration = Duration::from_secs(2);
 
 const ICON_SIZE: u32 = 32;
 
-/// Con `exit_with_game` la aplicación se cierra sola al cerrarse Factorio.
+/// With `exit_with_game`, the app closes itself once Factorio closes.
 pub fn run(
     config: Config,
     log_path: Option<std::path::PathBuf>,
@@ -33,31 +32,31 @@ pub fn run(
 ) -> Result<()> {
     let shared = Arc::new(Shared::default());
 
-    // La vigilancia no puede vivir aquí: este hilo se queda atendiendo mensajes.
+    // Watching can't live here: this thread stays busy handling messages.
     let worker = {
         let shared = Arc::clone(&shared);
         let config = config.clone();
         std::thread::Builder::new()
-            .name("vigilancia".into())
+            .name("watcher".into())
             .spawn(move || {
                 if let Err(err) = crate::run::run(&config, &shared, exit_with_game) {
-                    error!(%err, "la vigilancia se ha detenido");
+                    error!(%err, "watching has stopped");
                 }
-                // Como lanzador no queda nada que enseñar: el icono se va con ella,
-                // en vez de quedar colgado sin vigilancia detrás.
+                // As a launcher there's nothing left to show: the icon goes
+                // with it, instead of being left hanging with no watcher behind it.
                 if exit_with_game {
                     shared.request_shutdown();
                 }
             })
-            .context("no se pudo lanzar el hilo de vigilancia")?
+            .context("could not spawn the watcher thread")?
     };
 
     let menu = Menu::new();
-    let status_item = MenuItem::new("Iniciando…", false, None);
+    let status_item = MenuItem::new("Starting…", false, None);
     let autostart_item =
-        CheckMenuItem::new("Arrancar con Windows", true, autostart::is_enabled(), None);
-    let log_item = MenuItem::new("Abrir el registro", log_path.is_some(), None);
-    let quit_item = MenuItem::new("Salir", true, None);
+        CheckMenuItem::new("Start with Windows", true, autostart::is_enabled(), None);
+    let log_item = MenuItem::new("Open log", log_path.is_some(), None);
+    let quit_item = MenuItem::new("Exit", true, None);
 
     menu.append_items(&[
         &status_item,
@@ -67,16 +66,16 @@ pub fn run(
         &PredefinedMenuItem::separator(),
         &quit_item,
     ])
-    .context("no se pudo construir el menú de la bandeja")?;
+    .context("could not build the tray menu")?;
 
     let tray = TrayIconBuilder::new()
         .with_menu(Box::new(menu))
         .with_tooltip("Factorio Discord Rich Presence")
         .with_icon(build_icon()?)
         .build()
-        .context("no se pudo crear el icono de la bandeja")?;
+        .context("could not create the tray icon")?;
 
-    info!("icono de bandeja listo");
+    info!("tray icon ready");
 
     pump_messages(
         &tray,
@@ -93,7 +92,7 @@ pub fn run(
     Ok(())
 }
 
-/// Bucle de mensajes de Windows, con refresco periódico del texto emergente.
+/// Windows message loop, with periodic tooltip-text refresh.
 #[allow(clippy::too_many_arguments)]
 fn pump_messages(
     tray: &TrayIcon,
@@ -112,7 +111,7 @@ fn pump_messages(
             break;
         }
 
-        // La vigilancia puede pedir el cierre por su cuenta (modo lanzador).
+        // The watcher can request shutdown on its own (launcher mode).
         if shared.is_shutdown() {
             return;
         }
@@ -121,11 +120,12 @@ fn pump_messages(
             if event.id == *quit_item.id() {
                 return;
             } else if event.id == *autostart_item.id() {
-                // El elemento ya ha cambiado su marca; el registro debe seguirla.
+                // The item has already flipped its own check mark; the
+                // registry needs to follow it.
                 let wanted = autostart_item.is_checked();
                 if let Err(err) = autostart::set_enabled(wanted) {
-                    warn!(%err, "no se pudo cambiar el autoarranque");
-                    // Deshacer la marca para no mentir sobre el estado real.
+                    warn!(%err, "could not change autostart");
+                    // Undo the check mark so it doesn't lie about the real state.
                     autostart_item.set_checked(!wanted);
                 }
             } else if event.id == *log_item.id() {
@@ -139,47 +139,47 @@ fn pump_messages(
         let tooltip = status.tooltip();
         if tooltip != last_tooltip {
             let _ = tray.set_tooltip(Some(&tooltip));
-            // La primera línea del emergente es el título; en el menú basta el resto.
-            let resumen = tooltip.lines().skip(1).collect::<Vec<_>>().join(" — ");
-            status_item.set_text(resumen);
+            // The tooltip's first line is the title; the rest is enough for the menu.
+            let summary = tooltip.lines().skip(1).collect::<Vec<_>>().join(" — ");
+            status_item.set_text(summary);
             last_tooltip = tooltip;
         }
     }
 }
 
-/// Icono dibujado en código: un anillo naranja, guiño al engranaje de Factorio.
+/// Icon drawn in code: an orange ring, a nod to Factorio's gear.
 ///
-/// Generarlo evita arrastrar un fichero de imagen y una dependencia para
-/// decodificarlo, por 32×32 píxeles que nadie mira de cerca.
+/// Generating it avoids dragging in an image file and a dependency to
+/// decode it, for 32×32 pixels nobody looks at closely.
 fn build_icon() -> Result<Icon> {
-    const NARANJA: [u8; 3] = [0xE8, 0x8A, 0x1E];
+    const ORANGE: [u8; 3] = [0xE8, 0x8A, 0x1E];
 
     let size = ICON_SIZE as i32;
-    let centro = (size - 1) as f32 / 2.0;
-    let radio_exterior = centro;
-    let radio_interior = centro * 0.45;
+    let center = (size - 1) as f32 / 2.0;
+    let outer_radius = center;
+    let inner_radius = center * 0.45;
 
     let mut rgba = Vec::with_capacity((ICON_SIZE * ICON_SIZE * 4) as usize);
     for y in 0..size {
         for x in 0..size {
-            let dx = x as f32 - centro;
-            let dy = y as f32 - centro;
-            let distancia = (dx * dx + dy * dy).sqrt();
-            let dentro = distancia <= radio_exterior && distancia >= radio_interior;
+            let dx = x as f32 - center;
+            let dy = y as f32 - center;
+            let distance = (dx * dx + dy * dy).sqrt();
+            let inside = distance <= outer_radius && distance >= inner_radius;
 
-            if dentro {
-                rgba.extend_from_slice(&[NARANJA[0], NARANJA[1], NARANJA[2], 0xFF]);
+            if inside {
+                rgba.extend_from_slice(&[ORANGE[0], ORANGE[1], ORANGE[2], 0xFF]);
             } else {
                 rgba.extend_from_slice(&[0, 0, 0, 0]);
             }
         }
     }
 
-    Icon::from_rgba(rgba, ICON_SIZE, ICON_SIZE).context("no se pudo construir el icono")
+    Icon::from_rgba(rgba, ICON_SIZE, ICON_SIZE).context("could not build the icon")
 }
 
 //------------------------------------------------------------------------------
-// Envoltorios de Win32
+// Win32 wrappers
 //------------------------------------------------------------------------------
 
 mod windows {
@@ -189,16 +189,16 @@ mod windows {
         DispatchMessageW, PeekMessageW, TranslateMessage, MSG, PM_REMOVE, WM_QUIT,
     };
 
-    /// Atiende los mensajes pendientes y espera hasta `timeout`.
+    /// Handles pending messages and waits up to `timeout`.
     ///
-    /// Se usa `PeekMessage` en vez de `GetMessage` porque además de los mensajes
-    /// hay que refrescar el estado periódicamente, y `GetMessage` bloquearía sin
-    /// mensajes que atender.
+    /// Uses `PeekMessage` instead of `GetMessage` because, besides messages,
+    /// the state needs refreshing periodically, and `GetMessage` would block
+    /// with no messages to handle.
     ///
-    /// Devuelve `false` si Windows pide cerrar.
+    /// Returns `false` if Windows asks to close.
     pub fn pump_once(timeout: Duration) -> bool {
-        const PASO: Duration = Duration::from_millis(50);
-        let mut restante = timeout;
+        const STEP: Duration = Duration::from_millis(50);
+        let mut remaining = timeout;
 
         loop {
             let mut msg: MSG = unsafe { std::mem::zeroed() };
@@ -212,16 +212,16 @@ mod windows {
                 }
             }
 
-            if restante == Duration::ZERO {
+            if remaining == Duration::ZERO {
                 return true;
             }
-            let paso = restante.min(PASO);
-            std::thread::sleep(paso);
-            restante -= paso;
+            let step = remaining.min(STEP);
+            std::thread::sleep(step);
+            remaining -= step;
         }
     }
 
-    /// Abre una ruta con la aplicación asociada del sistema.
+    /// Opens a path with the system's associated application.
     pub fn open_in_explorer(path: &std::path::Path) {
         let _ = std::process::Command::new("cmd")
             .args(["/C", "start", "", &path.to_string_lossy()])
@@ -234,9 +234,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn el_icono_tiene_el_tamano_declarado() {
-        // `from_rgba` falla si el buffer no cuadra con las dimensiones, así que
-        // construirlo ya valida la geometría.
+    fn the_icon_has_the_declared_size() {
+        // `from_rgba` fails if the buffer doesn't match the dimensions, so
+        // building it already validates the geometry.
         assert!(build_icon().is_ok());
     }
 }

@@ -1,7 +1,7 @@
-//! Registro de la aplicación.
+//! Application logging.
 //!
-//! En modo bandeja no hay consola donde mirar, así que los mensajes van a un
-//! fichero en `%APPDATA%`. En modo consola siguen saliendo por pantalla.
+//! In tray mode there's no console to look at, so messages go to a file in
+//! `%APPDATA%`. In console mode they still print to the screen.
 
 use std::fs::OpenOptions;
 use std::sync::Mutex;
@@ -9,11 +9,11 @@ use std::sync::Mutex;
 use anyhow::{Context, Result};
 use tracing_subscriber::EnvFilter;
 
-/// A partir de este tamaño el log se vacía al arrancar.
+/// Once the log reaches this size, it's cleared on startup.
 ///
-/// Rotar de verdad exigiría otra dependencia para algo que crece unas pocas
-/// líneas por minuto; truncar al arrancar mantiene el fichero acotado y es
-/// suficiente para diagnosticar la sesión en curso.
+/// Real rotation would require another dependency for something that grows
+/// a few lines per minute; truncating on startup keeps the file bounded and
+/// is enough to diagnose the current session.
 const MAX_LOG_BYTES: u64 = 1024 * 1024;
 
 fn filter() -> EnvFilter {
@@ -21,7 +21,7 @@ fn filter() -> EnvFilter {
         .unwrap_or_else(|_| EnvFilter::new("factorio_discord_rp=info"))
 }
 
-/// Registro por consola, para los modos de línea de órdenes.
+/// Console logging, for command-line modes.
 pub fn init_console() {
     tracing_subscriber::fmt()
         .with_env_filter(filter())
@@ -29,9 +29,9 @@ pub fn init_console() {
         .init();
 }
 
-/// Registro a fichero, para cuando corre en la bandeja sin consola.
+/// File logging, for when it runs in the tray without a console.
 ///
-/// Devuelve la ruta del fichero, para poder abrirla desde el menú.
+/// Returns the file's path, so it can be opened from the menu.
 pub fn init_file() -> Result<std::path::PathBuf> {
     let path = crate::paths::log_path()?;
 
@@ -45,7 +45,7 @@ pub fn init_file() -> Result<std::path::PathBuf> {
         .create(true)
         .append(true)
         .open(&path)
-        .with_context(|| format!("no se pudo abrir el log en {}", path.display()))?;
+        .with_context(|| format!("could not open the log at {}", path.display()))?;
 
     tracing_subscriber::fmt()
         .with_env_filter(filter())
