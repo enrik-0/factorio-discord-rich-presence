@@ -463,10 +463,7 @@ mod tests {
 
         // Restoring the previous value leaves the file byte for byte as it was.
         let back = set_launch_options(&changed, "427520", before.as_deref()).unwrap();
-        assert_eq!(
-            back, original,
-            "the round trip must return the original"
-        );
+        assert_eq!(back, original, "the round trip must return the original");
     }
 
     #[test]

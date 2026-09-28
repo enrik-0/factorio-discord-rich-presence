@@ -148,9 +148,7 @@ pub fn report() -> Outcome {
 
     let line = resolved_line()?;
     println!();
-    println!(
-        "Full line to paste into Steam → Factorio → Properties → Launch Options:"
-    );
+    println!("Full line to paste into Steam → Factorio → Properties → Launch Options:");
     println!();
     println!("{line}");
     println!();

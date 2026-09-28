@@ -7,10 +7,7 @@
 use discord_rich_presence::activity::{Activity, Assets, Party, Timestamps};
 
 /// Discord truncates long texts; we trim it ourselves to control where it gets cut.
-#[allow(
-    dead_code,
-    reason = "consumed by the template renderer in phase 3"
-)]
+#[allow(dead_code, reason = "consumed by the template renderer in phase 3")]
 pub const MAX_TEXT_LEN: usize = 128;
 
 /// Tolerance margin when comparing timestamps, in seconds.
@@ -108,10 +105,7 @@ impl ActivitySpec {
 ///
 /// Important for save names and translated technology names, which can
 /// contain accents and multibyte characters.
-#[allow(
-    dead_code,
-    reason = "consumed by the template renderer in phase 3"
-)]
+#[allow(dead_code, reason = "consumed by the template renderer in phase 3")]
 pub fn truncate(text: &str) -> String {
     if text.chars().count() <= MAX_TEXT_LEN {
         return text.to_string();

@@ -208,10 +208,7 @@ mod tests {
 
     #[test]
     fn a_hand_pasted_launcher_is_replaced_not_nested() {
-        assert_eq!(
-            install(PEGADA_A_MANO, EXE),
-            format!("{} %command%", ours())
-        );
+        assert_eq!(install(PEGADA_A_MANO, EXE), format!("{} %command%", ours()));
     }
 
     #[test]

@@ -206,8 +206,8 @@ impl Config {
             return Ok(path);
         }
 
-        let appdata = std::env::var("APPDATA")
-            .context("could not read %APPDATA% to locate Factorio")?;
+        let appdata =
+            std::env::var("APPDATA").context("could not read %APPDATA% to locate Factorio")?;
         let path = PathBuf::from(appdata).join("Factorio");
         if !path.is_dir() {
             bail!(

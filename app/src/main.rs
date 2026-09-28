@@ -371,11 +371,7 @@ fn run_check(config: &Config) -> Result<()> {
             let log = dir.join("factorio-current.log");
             println!(
                 "  factorio-current.log  {}",
-                if log.is_file() {
-                    "found"
-                } else {
-                    "missing"
-                }
+                if log.is_file() { "found" } else { "missing" }
             );
             let script_output = dir.join("script-output");
             println!(

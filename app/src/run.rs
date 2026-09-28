@@ -167,10 +167,7 @@ pub fn dump(config: &Config) -> Result<()> {
     println!("Version              {}", opt(&state.game_version));
     println!(
         "Multiplayer          {}",
-        state
-            .multiplayer
-            .map(yes_no)
-            .unwrap_or("unknown".into())
+        state.multiplayer.map(yes_no).unwrap_or("unknown".into())
     );
     println!(
         "Surface              {}",

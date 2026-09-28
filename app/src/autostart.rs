@@ -37,14 +37,10 @@ pub fn is_enabled() -> bool {
 pub fn set_enabled(enabled: bool) -> Result<()> {
     let launcher = launcher()?;
     if enabled {
-        launcher
-            .enable()
-            .context("could not enable autostart")?;
+        launcher.enable().context("could not enable autostart")?;
         info!("autostart enabled");
     } else {
-        launcher
-            .disable()
-            .context("could not disable autostart")?;
+        launcher.disable().context("could not disable autostart")?;
         info!("autostart disabled");
     }
     Ok(())
