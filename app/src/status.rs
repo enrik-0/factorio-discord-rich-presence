@@ -20,6 +20,13 @@ pub struct Status {
 impl Status {
     /// The icon's tooltip text. Must fit on one line and say the essentials:
     /// whether Discord or Factorio is missing, and what's being published.
+    #[cfg_attr(
+        unix,
+        allow(
+            dead_code,
+            reason = "consumed by the Windows tray (tray.rs); no tray on Unix yet"
+        )
+    )]
     pub fn tooltip(&self) -> String {
         let mut lines = vec!["Factorio Discord Rich Presence".to_string()];
 
@@ -45,6 +52,13 @@ pub struct Shared {
 }
 
 impl Shared {
+    #[cfg_attr(
+        unix,
+        allow(
+            dead_code,
+            reason = "consumed by the Windows tray (tray.rs); no tray on Unix yet"
+        )
+    )]
     pub fn snapshot(&self) -> Status {
         // A poisoned lock shouldn't bring down the application: what's inside
         // is informational, not critical.

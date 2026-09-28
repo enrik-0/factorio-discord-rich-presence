@@ -20,7 +20,13 @@ sysinfo = "0.39.6"
 toml = "1.1.4"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-tray-icon = "0.24.2"
+
+# The registry, clipboard, console window, and tray icon (tray-icon/muda need
+# GTK on Linux, which this project doesn't commit to having available) are
+# Windows-specific; other platforms don't even need to resolve these crates.
+# The "minimum viable" version on Linux runs in console mode (--console), with
+# no tray.
+[target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = [
     "Win32_Foundation",
     "Win32_Security",
@@ -31,6 +37,11 @@ windows-sys = { version = "0.61.2", features = [
     "Win32_System_Threading",
     "Win32_UI_WindowsAndMessaging",
 ] }
+tray-icon = "0.24.2"
+
+# Single-instance locking on Unix is done with flock on a file.
+[target.'cfg(unix)'.dependencies]
+fd-lock = "*"
 
 [dev-dependencies]
 filetime = "0.2.29"

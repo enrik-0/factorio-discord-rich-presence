@@ -16,12 +16,14 @@ rompería el determinismo en multijugador. Así que:
 
 ## Requisitos
 
-- Windows, y Factorio **2.0** o superior (el mod declara `factorio_version: "2.0"`;
-  Factorio no tiene compatibilidad hacia delante, así que no carga en 1.1)
-- Si juegas a Factorio desde Steam, no hace falta nada más: el instalador lo detecta
-  solo.
+- Windows o Linux, y Factorio **2.0** o superior (el mod declara
+  `factorio_version: "2.0"`; Factorio no tiene compatibilidad hacia delante, así que
+  no carga en 1.1)
+- En Windows, si juegas a Factorio desde Steam, no hace falta nada más: el instalador
+  lo detecta solo. El soporte en Linux es más nuevo y manual — ver
+  [Instalación (Linux)](#instalación-linux) más abajo.
 
-## Instalación
+## Instalación (Windows)
 
 1. Descarga el instalador (`FactorioDiscordRP-Setup-*.exe`) desde
    [Releases](https://github.com/enrik-0/factorio-discord-rich-presence/releases) y
@@ -45,6 +47,35 @@ puesto en las opciones de lanzamiento de Steam, sin tocar el resto de tus opcion
 
 Dentro del juego, `/drp-debug` imprime los datos que está publicando el mod, para
 contrastarlos con el árbol de tecnologías.
+
+## Instalación (Linux)
+
+El soporte en Linux es más nuevo y manual que en Windows: no hay instalador, ni
+configuración automática de Steam, ni icono en la bandeja del sistema todavía — la
+aplicación simplemente corre en segundo plano y deja el registro en un fichero.
+
+1. Descarga `factorio-discord-rp-linux-x86_64-*.tar.gz` desde
+   [Releases](https://github.com/enrik-0/factorio-discord-rich-presence/releases) y
+   descomprímelo en un sitio permanente. Asegúrate de que el binario tiene permiso de
+   ejecución (`chmod +x factorio-discord-rp`).
+2. En Steam → Factorio → Propiedades → Opciones de lanzamiento, añade:
+   ```
+   "/ruta/a/factorio-discord-rp" %command%
+   ```
+   (con la ruta real de donde lo hayas descomprimido). La aplicación arranca Factorio,
+   publica mientras siga abierto y se cierra sola poco después de que lo cierres.
+3. Instala el mod «Discord Rich Presence», igual que arriba — desde el
+   [Mod Portal](https://mods.factorio.com/mod/discord-rich-presence) o desde el propio
+   juego.
+4. Juega. Comprueba la tarjeta **desde otra cuenta de Discord**.
+
+No hace falta configurar ningún Application ID para el uso normal, igual que en
+Windows. Para dejar de usarla, basta con quitar esa línea de las opciones de
+lanzamiento y borrar el binario — no queda nada más instalado en ningún sitio.
+
+`factorio-discord-rp --check` desde una terminal informa de lo que encuentra (rutas,
+Application ID) sin tocar Discord; el registro queda en
+`~/.local/share/factorio-discord-rp/factorio-discord-rp.log`.
 
 ## Ajustes del mod
 
@@ -90,89 +121,6 @@ del mod *y* en `config.toml`. Es el único campo que expone algo de fuera de la
 partida, así que la aplicación mantiene un veto por encima del mod.
 
 El resto se controla desde los ajustes del mod, dentro del juego.
-
-## Desarrollo
-
-Para compilar y ejecutar desde el código en vez de usar el instalador:
-
-- Rust estable, para compilar la aplicación.
-- Python 3, sólo para el script de empaquetado del mod.
-- Inno Setup 6, sólo para compilar el instalador (`installer/factorio-discord-rp.iss`).
-
-### Crear la aplicación de Discord
-
-Sólo hace falta una vez, si no vas a usar el instalador (que ya trae una incluida):
-
-1. Entra en <https://discord.com/developers/applications> y pulsa **New Application**.
-2. Llámala exactamente `Factorio` — ese nombre es lo que Discord muestra como
-   *"Jugando a ..."*.
-3. Copia el **Application ID** de *General Information*.
-4. En *Rich Presence → Art Assets* sube **una sola imagen**, el logo de Factorio,
-   con la clave `factorio`. No hace falta un icono por planeta: el planeta se lee
-   en el texto de la tarjeta.
-
-### Configurar y ejecutar
-
-```bash
-cp app/config.example.toml config.toml
-```
-
-Pon el Application ID en `config.toml`. Para una prueba rápida sirve la variable
-de entorno `FACTORIO_DRP_APP_ID`.
-
-```bash
-cargo run -- --check      # Application ID y rutas, sin conectar con Discord
-cargo run -- --selftest   # publica una actividad fija y la mantiene
-```
-
-Compruébalo **desde otra cuenta de Discord**: el propio perfil no muestra la
-tarjeta completa.
-
-### Empaquetar el mod
-
-```bash
-python scripts/package_mod.py
-```
-
-Copia el zip resultante de `dist/` a tu carpeta `mods` de Factorio.
-
-### Compilar el instalador
-
-```bash
-cargo build --release
-ISCC.exe /DAppVersion=0.5.2 installer\factorio-discord-rp.iss
-```
-
-`FACTORIO_DRP_DEFAULT_APP_ID`, puesto antes de `cargo build`, incluye un Application
-ID por defecto en el binario (lo hace la CI con una variable del repositorio); sin
-él, cada usuario necesita su propio `config.toml`.
-
-### Tests y lint
-
-```bash
-cargo test
-cargo fmt --all --check
-cargo clippy --all-targets -- -D warnings
-```
-
-### Abrirla junto con Factorio a mano
-
-Es lo que hace el instalador por ti. Para hacerlo sin él, en Steam → Factorio →
-Propiedades → Opciones de lanzamiento:
-
-```
-"C:\ruta\a\factorio-discord-rp.exe" %command%
-```
-
-La aplicación arranca Factorio, publica mientras siga abierto y se cierra sola
-poco después de que lo cierres. Todo lo que sigue a la ruta del juego es del juego,
-así que tus otras opciones de lanzamiento siguen funcionando.
-
-- Si ya la tienes en la bandeja con **Arrancar con Windows**, esa copia es la que
-  publica y esta sólo lanza el juego: nunca hay dos copias a la vez.
-- Si la configuración falla, Factorio arranca igualmente, sin presencia. El motivo
-  queda en el registro (`%APPDATA%\factorio-discord-rp\factorio-discord-rp.log`).
-- El `config.toml` se busca junto al `.exe` y en `%APPDATA%\factorio-discord-rp\`.
 
 ## Licencia
 

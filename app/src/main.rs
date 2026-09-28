@@ -16,9 +16,15 @@ mod model;
 mod paths;
 mod presence;
 mod run;
+// Steam configuration (registry, VDF, Win32 clipboard) is Windows-specific;
+// on Linux, "minimum viable" means going without it for now (see the port plan).
+#[cfg(windows)]
 mod setup;
 mod sources;
 mod status;
+// tray-icon needs GTK on Linux (see app/Cargo.toml); "minimum viable" on that
+// platform runs in console/file mode, with no tray icon.
+#[cfg(windows)]
 mod tray;
 
 use std::ffi::OsString;
@@ -257,6 +263,7 @@ fn main() -> Result<()> {
 
 /// Steam-configuration modes: they do their job, print, and exit with the
 /// matching code (0, 10, 11, 12, or 1; see `setup::Failure`).
+#[cfg(windows)]
 fn run_setup(args: &Args) -> Result<()> {
     use setup::Action;
 
@@ -285,13 +292,25 @@ fn run_setup(args: &Args) -> Result<()> {
     Ok(())
 }
 
+/// On Linux/macOS there's no Steam or Windows-registry integration yet (out
+/// of scope for the "minimum viable" port): this warns clearly instead of
+/// failing to compile or half-simulating something.
+#[cfg(unix)]
+fn run_setup(_args: &Args) -> Result<()> {
+    eprintln!(
+        "error: --setup/--apply/--uninstall/--print-command/--copy-command/--autostart \
+         are only supported on Windows for now."
+    );
+    std::process::exit(1);
+}
+
 /// Resident tray, e.g. the one from autostart. Only one per session.
 fn run_resident(config: Config, log_path: Option<PathBuf>) -> Result<()> {
     let Some(_guard) = instance::acquire() else {
         info!("another copy of the app is already running; not opening a second one");
         return Ok(());
     };
-    tray::run(config, log_path, false)
+    run_as_resident(config, log_path, false)
 }
 
 /// Launcher mode: starts Factorio and stays around while it's open.
@@ -320,7 +339,21 @@ fn launch(config_path: Option<&Path>, log_path: Option<PathBuf>, game: GameComma
         }
     };
 
-    tray::run(config, log_path, true)
+    run_as_resident(config, log_path, true)
+}
+
+/// Watches and publishes "residently": with a tray icon on Windows, or on
+/// the same thread without one elsewhere (logging is already redirected to
+/// a file by `main()` before this is reached).
+#[cfg(windows)]
+fn run_as_resident(config: Config, log_path: Option<PathBuf>, exit_with_game: bool) -> Result<()> {
+    tray::run(config, log_path, exit_with_game)
+}
+
+#[cfg(unix)]
+fn run_as_resident(config: Config, _log_path: Option<PathBuf>, exit_with_game: bool) -> Result<()> {
+    let shared = Arc::new(Shared::default());
+    run::run(&config, &shared, exit_with_game)
 }
 
 /// Starts the game without waiting for it. Dropping the `Child` doesn't stop it.
@@ -352,11 +385,18 @@ fn spawn_game(game: &GameCommand) -> Result<()> {
 /// `--dump` work normally from a terminal. The trade-off is that a console
 /// appears when starting with Windows, which gets closed here. If the
 /// process came from a terminal, this only detaches it from that terminal.
+#[cfg(windows)]
 fn hide_console() {
     unsafe {
         windows_sys::Win32::System::Console::FreeConsole();
     }
 }
+
+/// On Unix there's no console window to hide: the process is already born
+/// without one if launched as a service, and if launched from a terminal
+/// it's normal for it to stay attached to it.
+#[cfg(unix)]
+fn hide_console() {}
 
 /// Checks what can be checked without depending on Discord or Factorio.
 fn run_check(config: &Config) -> Result<()> {
@@ -592,6 +632,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(windows)]
     fn the_games_path_may_not_be_unicode() {
         use std::os::windows::ffi::OsStringExt;
         // A lone surrogate isn't valid UTF-16, but Windows allows it in paths.

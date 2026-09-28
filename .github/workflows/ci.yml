@@ -9,9 +9,33 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  app:
-    name: App (Rust)
+  app-windows:
+    name: App (Rust, Windows)
     runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --all
+
+  # Actually builds and tests on Linux (not just a cross-target `cargo
+  # check`): the tray icon is Windows-only (see app/Cargo.toml), so this
+  # runner doesn't need GTK or pkg-config, just the normal Rust toolchain.
+  app-linux:
+    name: App (Rust, Linux)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 

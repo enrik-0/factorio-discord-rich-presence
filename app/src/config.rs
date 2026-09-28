@@ -206,9 +206,7 @@ impl Config {
             return Ok(path);
         }
 
-        let appdata =
-            std::env::var("APPDATA").context("could not read %APPDATA% to locate Factorio")?;
-        let path = PathBuf::from(appdata).join("Factorio");
+        let path = default_factorio_data_dir()?;
         if !path.is_dir() {
             bail!(
                 "could not find the Factorio data folder at {}. \
@@ -218,6 +216,21 @@ impl Config {
         }
         Ok(path)
     }
+}
+
+/// Default location of Factorio's data folder: `%APPDATA%\Factorio` on
+/// Windows, `~/.factorio` on Unix (where Factorio actually puts it on Linux).
+#[cfg(windows)]
+fn default_factorio_data_dir() -> Result<PathBuf> {
+    let appdata =
+        std::env::var("APPDATA").context("could not read %APPDATA% to locate Factorio")?;
+    Ok(PathBuf::from(appdata).join("Factorio"))
+}
+
+#[cfg(unix)]
+fn default_factorio_data_dir() -> Result<PathBuf> {
+    let home = std::env::var("HOME").context("could not read $HOME to locate Factorio")?;
+    Ok(PathBuf::from(home).join(".factorio"))
 }
 
 #[cfg(test)]

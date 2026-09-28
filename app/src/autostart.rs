@@ -34,6 +34,14 @@ pub fn is_enabled() -> bool {
         .unwrap_or(false)
 }
 
+#[cfg_attr(
+    unix,
+    allow(
+        dead_code,
+        reason = "only called by --autostart, which is gated to Windows for now (see setup/); \
+                  the function itself is already cross-platform via auto-launch"
+    )
+)]
 pub fn set_enabled(enabled: bool) -> Result<()> {
     let launcher = launcher()?;
     if enabled {
