@@ -1,25 +1,26 @@
-//! Estado unificado de la partida y el formato que produce el mod.
+//! Unified game state and the format the mod produces.
 
 use serde::Deserialize;
 
-/// Versión del contrato con el mod. Un `schema` distinto se rechaza en lugar de
-/// interpretarse mal.
+/// Version of the contract with the mod. A different `schema` is rejected
+/// rather than misinterpreted.
 pub const SUPPORTED_SCHEMA: u32 = 2;
 
-/// Lo que la aplicación cree que está pasando, fusionado de todas las fuentes.
+/// What the app believes is happening, merged from every source.
 ///
-/// Todo es opcional: cada fuente aporta lo que sabe y ninguna es obligatoria.
+/// Everything is optional: each source contributes what it knows and none
+/// of them is mandatory.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct GameState {
-    /// ¿Hay un proceso de Factorio vivo? Es la condición maestra.
+    /// Is a Factorio process alive? This is the master condition.
     pub running: bool,
 
-    // --- del log ---
+    // --- from the log ---
     pub save_name: Option<String>,
     pub game_version: Option<String>,
     pub server_address: Option<String>,
 
-    // --- del mod ---
+    // --- from the mod ---
     pub player_name: Option<String>,
     pub controller: Option<String>,
     pub surface: Option<Surface>,
@@ -30,53 +31,54 @@ pub struct GameState {
     pub mod_count: Option<u32>,
     pub overhaul: Option<String>,
     pub evolution: Option<f64>,
-    /// Tiempo de esta sesión, frente a `ticks_played` que es el del save.
+    /// Time for this session, as opposed to `ticks_played`, which is the save's.
     pub session_ticks: Option<u64>,
-    // --- estadísticas "meme" ---
+    // --- "meme" stats ---
     pub trees_razed: Option<u64>,
     pub enemies_killed: Option<u64>,
     pub player_deaths: Option<u64>,
-    /// De todas las superficies del juego, no sólo de la fuerza: la API no
-    /// permite separarla por fuerza (ver `collect.total_pollution` en el mod).
+    /// Across every surface in the game, not just the force's: the API
+    /// doesn't allow splitting it by force (see `collect.total_pollution` in
+    /// the mod).
     pub pollution_emitted: Option<f64>,
-    /// Ticks desde la última acción del jugador. Valor en vivo: no viene de
-    /// una caché, así que puede no coincidir exactamente con lo que el
-    /// jugador ve en pantalla en este mismo instante.
+    /// Ticks since the player's last action. A live value: it doesn't come
+    /// from a cache, so it may not exactly match what the player sees on
+    /// screen at this very instant.
     pub afk_ticks: Option<u64>,
-    /// Instante Unix (segundos) en que el mod escribió los datos de arriba.
+    /// Unix instant (seconds) at which the mod wrote the data above.
     ///
-    /// Es el ancla del cronómetro: `ticks_played` y `session_ticks` describen ese
-    /// instante, no el de nuestro sondeo.
+    /// This anchors the timer: `ticks_played` and `session_ticks` describe
+    /// that instant, not the moment we polled it.
     pub sampled_at: Option<i64>,
-    /// Qué quiere ver el jugador. `None` en modo degradado, sin el mod.
+    /// What the player wants to see. `None` in degraded mode, without the mod.
     pub display: Option<Display>,
 
-    /// El mod y el log pueden saberlo por separado.
+    /// The mod and the log can each know this independently.
     pub multiplayer: Option<bool>,
 }
 
 impl GameState {
-    /// ¿Está el mod aportando datos, o vamos en modo degradado?
+    /// Is the mod contributing data, or are we in degraded mode?
     pub fn has_mod_data(&self) -> bool {
         self.surface.is_some() || self.research.is_some() || self.ticks_played.is_some()
     }
 
-    /// Tiempo jugado del save, en segundos. Factorio corre a 60 ticks/segundo.
+    /// Save playtime, in seconds. Factorio runs at 60 ticks/second.
     pub fn playtime_secs(&self) -> Option<i64> {
         self.ticks_played.map(|ticks| (ticks / 60) as i64)
     }
 
-    /// Tiempo de la sesión actual, en segundos.
+    /// Current session time, in seconds.
     pub fn session_secs(&self) -> Option<i64> {
         self.session_ticks.map(|ticks| (ticks / 60) as i64)
     }
 
-    /// Tiempo AFK, en segundos.
+    /// AFK time, in seconds.
     pub fn afk_secs(&self) -> Option<i64> {
         self.afk_ticks.map(|ticks| (ticks / 60) as i64)
     }
 
-    /// Preferencias del jugador, o las de fábrica si el mod no está.
+    /// Player preferences, or the factory defaults if the mod isn't present.
     pub fn display(&self) -> Display {
         self.display.clone().unwrap_or_default()
     }
@@ -85,17 +87,17 @@ impl GameState {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Surface {
     pub name: String,
-    /// `planet`, `platform` u `other`.
+    /// `planet`, `platform`, or `other`.
     pub kind: String,
-    /// Sólo presente cuando `kind == "planet"`.
+    /// Only present when `kind == "planet"`.
     pub planet: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct Research {
-    /// Nombre crudo del prototipo. `None` si no hay nada en cola.
+    /// Raw prototype name. `None` if nothing is queued.
     pub current: Option<String>,
-    /// Nombre traducido al idioma del jugador, si ya llegó la traducción.
+    /// Name translated into the player's language, once the translation has arrived.
     #[serde(default, deserialize_with = "deserialize_repaired")]
     pub current_label: Option<String>,
     pub progress: Option<f64>,
@@ -104,7 +106,7 @@ pub struct Research {
 }
 
 impl Research {
-    /// Etiqueta a mostrar: la traducida si existe, si no el nombre del prototipo.
+    /// Label to display: the translated one if it exists, otherwise the prototype name.
     pub fn label(&self) -> Option<&str> {
         self.current_label.as_deref().or(self.current.as_deref())
     }
@@ -116,16 +118,16 @@ impl Research {
 }
 
 //------------------------------------------------------------------------------
-// Preferencias de visualización
+// Display preferences
 //------------------------------------------------------------------------------
 
-/// Qué campos quiere ver el jugador. Se configura en los ajustes del mod, dentro
-/// del juego, y llega en cada escritura.
+/// Which fields the player wants to see. Configured in the mod's in-game
+/// settings, and sent with every write.
 ///
-/// El fichero de estado nunca sale del equipo, así que elegir qué se muestra es
-/// a la vez el control de privacidad: lo único que ven los demás es la tarjeta.
-/// Los valores por defecto replican los del mod, para que el modo degradado
-/// (sin mod instalado) se comporte igual.
+/// The state file never leaves the machine, so choosing what's shown is also
+/// the privacy control: the card is the only thing anyone else sees.
+/// The defaults mirror the mod's, so degraded mode (mod not installed)
+/// behaves the same way.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub struct Display {
@@ -175,34 +177,35 @@ impl Default for Display {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TimerMode {
-    /// Tiempo jugado acumulado de la partida.
+    /// Accumulated save playtime.
     #[default]
     Save,
-    /// Tiempo de la sesión actual.
+    /// Current session time.
     Session,
-    /// Sin cronómetro.
+    /// No timer.
     None,
 }
 
 //------------------------------------------------------------------------------
-// Reparación de la codificación
+// Encoding repair
 //------------------------------------------------------------------------------
 
-/// Deshace el doble escapado que produce `helpers.table_to_json` de Factorio.
+/// Undoes the double-escaping produced by Factorio's `helpers.table_to_json`.
 ///
-/// Las traducciones que devuelve `on_string_translated` son cadenas UTF-8, pero
-/// `table_to_json` trata cada **byte** como si fuera un carácter y lo escapa por
-/// separado. Así, `ó` (bytes `C3 B3`) sale del mod como `Ã³`, es decir
-/// `Ã³`. Sin esto, toda tecnología con acento llegaría ilegible.
+/// The translations `on_string_translated` returns are UTF-8 strings, but
+/// `table_to_json` treats each **byte** as if it were a character and
+/// escapes it separately. So `ó` (bytes `C3 B3`) comes out of the mod as
+/// `Ã³`. Without this, every technology with an accent would arrive
+/// unreadable.
 ///
-/// La reparación sólo se aplica cuando reinterpretar los caracteres como bytes
-/// produce UTF-8 válido, así que un texto correcto nunca se estropea: una `ó`
-/// legítima es el byte `F3`, que por sí solo no es UTF-8 válido y se descarta.
+/// The repair only applies when reinterpreting the characters as bytes
+/// produces valid UTF-8, so correct text is never damaged: a legitimate `ó`
+/// is the byte `F3`, which on its own isn't valid UTF-8 and gets discarded.
 fn repair_mojibake(text: &str) -> String {
     if text.is_ascii() {
         return text.to_string();
     }
-    // Si hay algún carácter fuera del rango de un byte, no viene de este defecto.
+    // If any character is outside a byte's range, it doesn't come from this defect.
     if text.chars().any(|c| c as u32 > 0xFF) {
         return text.to_string();
     }
@@ -223,7 +226,7 @@ where
 }
 
 //------------------------------------------------------------------------------
-// Formato del fichero que escribe el mod
+// Format of the file the mod writes
 //------------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Deserialize)]
@@ -254,7 +257,7 @@ pub struct ModState {
     pub afk_ticks: Option<u64>,
     #[serde(default)]
     pub display: Option<Display>,
-    /// No viene en el JSON: lo rellena el lector con la fecha del fichero.
+    /// Not present in the JSON: the reader fills this in with the file's date.
     #[serde(skip)]
     pub sampled_at: Option<i64>,
 }
@@ -304,7 +307,7 @@ mod tests {
     }"#;
 
     #[test]
-    fn deserializa_el_payload_completo() {
+    fn deserializes_the_full_payload() {
         let state: ModState = serde_json::from_str(SAMPLE).unwrap();
         assert_eq!(state.schema, 1);
         assert_eq!(state.seq, 412);
@@ -314,9 +317,9 @@ mod tests {
     }
 
     #[test]
-    fn tolera_secciones_opcionales_ausentes() {
-        // Ocurre de verdad: el jugador puede apagar "compartir planeta" e
-        // "investigación" en los ajustes por usuario.
+    fn tolerates_missing_optional_sections() {
+        // This happens for real: the player can turn off "share planet" and
+        // "research" in their per-user settings.
         let json = r#"{
             "schema": 1, "seq": 1,
             "player": { "name": "a", "index": 1, "controller": "god" },
@@ -329,7 +332,7 @@ mod tests {
     }
 
     #[test]
-    fn etiqueta_de_investigacion_cae_al_nombre_crudo() {
+    fn research_label_falls_back_to_raw_name() {
         let research = Research {
             current: Some("electromagnetic-plant".into()),
             current_label: None,
@@ -342,7 +345,7 @@ mod tests {
     }
 
     #[test]
-    fn porcentaje_se_recorta_al_rango_valido() {
+    fn percent_is_clamped_to_the_valid_range() {
         let research = Research {
             current: Some("x".into()),
             current_label: None,
@@ -354,8 +357,8 @@ mod tests {
     }
 
     #[test]
-    fn repara_los_acentos_que_rompe_table_to_json() {
-        // Capturado literalmente del state.json de una partida real en español.
+    fn repairs_the_accents_table_to_json_breaks() {
+        // Captured verbatim from the state.json of a real save in Spanish.
         assert_eq!(
             repair_mojibake("ExtracciÃ³n de petrÃ³leo"),
             "Extracción de petróleo"
@@ -363,7 +366,7 @@ mod tests {
     }
 
     #[test]
-    fn no_toca_un_texto_ya_correcto() {
+    fn leaves_already_correct_text_untouched() {
         assert_eq!(
             repair_mojibake("Extracción de petróleo"),
             "Extracción de petróleo"
@@ -373,7 +376,7 @@ mod tests {
     }
 
     #[test]
-    fn la_reparacion_llega_hasta_el_payload() {
+    fn the_repair_reaches_all_the_way_to_the_payload() {
         let json = r#"{
             "schema": 1, "seq": 1,
             "player": { "name": "enrik0", "index": 1, "controller": "character" },
@@ -392,7 +395,7 @@ mod tests {
     }
 
     #[test]
-    fn tiempo_jugado_convierte_ticks_a_segundos() {
+    fn playtime_converts_ticks_to_seconds() {
         let state = GameState {
             ticks_played: Some(1_236_600),
             ..Default::default()
