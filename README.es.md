@@ -16,9 +16,10 @@ rompería el determinismo en multijugador. Así que:
 
 ## Requisitos
 
-- Windows o Linux, y Factorio **2.0** o superior (el mod declara
-  `factorio_version: "2.0"`; Factorio no tiene compatibilidad hacia delante, así que
-  no carga en 1.1)
+- Windows o Linux, y Factorio **2.0** o superior. Los mods de Factorio solo pueden
+  apuntar a una versión mayor a la vez (sin rangos), así que cada publicación del mod
+  en el Mod Portal va fijada a una; el propio Portal te sirve automáticamente la que
+  corresponda a tu Factorio instalado.
 - En Windows, si juegas a Factorio desde Steam, no hace falta nada más: el instalador
   lo detecta solo. El soporte en Linux es más nuevo y manual — ver
   [Instalación (Linux)](#instalación-linux) más abajo.

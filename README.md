@@ -16,9 +16,10 @@ determinism in multiplayer. So:
 
 ## Requirements
 
-- Windows or Linux, and Factorio **2.0** or later (the mod declares
-  `factorio_version: "2.0"`; Factorio has no forward compatibility, so it won't load
-  on 1.1)
+- Windows or Linux, and Factorio **2.0** or later. Factorio mods can only target one
+  Factorio version at a time (no ranges), so each Mod Portal release of the mod is
+  pinned to one; the portal serves you whichever release matches your installed
+  Factorio automatically.
 - On Windows, if you play Factorio through Steam, nothing else is needed: the installer
   detects it on its own. Linux support is newer and more manual — see
   [Installation (Linux)](#installation-linux) below.

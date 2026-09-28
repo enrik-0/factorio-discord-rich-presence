@@ -1,4 +1,12 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.5.2
+Date: 2026-09-28
+  Changes:
+    - Retargeted at Factorio 2.1: factorio_version does not support ranges, so a single release
+      can only declare one major version. This release is for 2.1; the 0.5.1 release stays
+      published and is served automatically to players still on 2.0 by the Mod Portal. No code
+      changes from 0.5.1.
+---------------------------------------------------------------------------------------------------
 Version: 0.5.1
 Date: 2026-09-28
   Changes:
