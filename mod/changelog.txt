@@ -9,51 +9,50 @@ Date: 2026-09-28
 Version: 0.5.0
 Date: 2026-09-27
   Changes:
-    - Primera publicación en el Mod Portal. Sin cambios de código sobre la 0.3.0.
+    - First publication on the Mod Portal. No code changes since 0.3.0.
 ---------------------------------------------------------------------------------------------------
 Version: 0.3.0
 Date: 2026-09-27
   Features:
-    - Nuevos contadores "meme", al pasar el ratón: árboles arrasados, enemigos abatidos,
-      muertes, contaminación emitida y tiempo AFK. Todos apagados por defecto. Árboles,
-      enemigos y muertes se ocultan mientras sean cero, como ya pasaba con los cohetes.
-    - La contaminación no es por fuerza (el juego no lo permite): es el total de todas
-      las superficies de la partida.
+    - New "meme" counters, on hover: trees razed, enemies killed, deaths, pollution emitted, and
+      AFK time. All off by default. Trees, enemies, and deaths are hidden while zero, same as
+      rockets already were.
+    - Pollution isn't per force (the game doesn't allow it): it's the total across every surface
+      in the game.
 ---------------------------------------------------------------------------------------------------
 Version: 0.2.2
 Date: 2026-09-26
   Bugfixes:
-    - El cronómetro de sesión marcaba siempre 0. Al cargar una partida ya empezada
-      Factorio no avisa de que el jugador entra, así que el inicio de la sesión no
-      se guardaba. Ahora arranca la primera vez que el mod ve al jugador.
-    - El inicio de la sesión ya no se guarda en la partida: antes habría sobrevivido
-      al cierre y contado horas de sesiones anteriores.
+    - The session timer always showed 0. When loading an already-started save, Factorio doesn't
+      fire the event for the player joining, so the session start was never saved. It now starts
+      the first time the mod sees the player.
+    - The session start is no longer saved in the save file: it used to survive closing the game
+      and count hours from previous sessions.
 ---------------------------------------------------------------------------------------------------
 Version: 0.2.1
 Date: 2026-08-29
   Bugfixes:
-    - Los textos en español no se cargaban: Factorio usa el código es-ES, no es.
-    - El tiempo de sesión mostraba casi toda la partida. player.online_time acumula
-      todas las sesiones del jugador, así que ahora se mide desde que entra.
+    - Spanish text wasn't loading: Factorio uses the es-ES locale code, not es.
+    - The session time showed almost the whole game's playtime. player.online_time accumulates
+      every session the player has had, so it's now measured from when they join instead.
 ---------------------------------------------------------------------------------------------------
 Version: 0.2.0
 Date: 2026-08-29
   Features:
-    - Ahora eliges desde los ajustes qué campos aparecen en la tarjeta de Discord.
-      Cada uno indica en qué hueco sale, así que ninguna casilla puede activarse
-      sin que se vea nada.
-    - Nuevos campos: factor de evolución, modpack detectado, número de mods,
-      cohetes lanzados y nombre de jugador.
-    - El cronómetro puede contar el tiempo de la partida, el de la sesión, o nada.
+    - You now choose from the settings which fields show up on the Discord card. Each one states
+      which slot it goes in, so no checkbox can be turned on without anything showing up.
+    - New fields: evolution factor, detected modpack, mod count, rockets launched, and player
+      name.
+    - The timer can count the save's playtime, the current session's, or nothing.
   Changes:
-    - Se envía siempre toda la información disponible: el fichero no sale del
-      equipo, así que lo que se elige es qué se muestra.
-    - Los contadores a cero se ocultan solos.
+    - All available information is always sent: the file never leaves the machine, so what you
+      choose is what gets shown.
+    - Counters at zero hide themselves automatically.
 ---------------------------------------------------------------------------------------------------
 Version: 0.1.0
 Date: 2026-08-29
   Features:
-    - Primera versión: publica planeta, investigación en curso, tecnologías completadas
-      y tiempo jugado en script-output/discord-rp/state.json.
-    - Ajustes por jugador para elegir qué se comparte en multijugador.
-    - Comando /drp-debug para contrastar el conteo de tecnologías.
+    - First version: publishes the planet, current research, completed technologies, and playtime
+      to script-output/discord-rp/state.json.
+    - Per-player settings to choose what's shared in multiplayer.
+    - /drp-debug command to cross-check the technology count.
