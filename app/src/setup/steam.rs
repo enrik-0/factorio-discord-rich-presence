@@ -1,9 +1,9 @@
-//! Localización de Steam y de la configuración del usuario.
+//! Steam and user configuration location.
 //!
-//! Se lee el registro de Windows (`HKCU\Software\Valve\Steam`) en vez de suponer
-//! `C:\Program Files (x86)\Steam`: Steam puede estar en otra unidad, y el usuario
-//! activo sólo se sabe preguntándoselo a él (`userdata` contiene una carpeta por
-//! cada cuenta que haya iniciado sesión alguna vez en el equipo).
+//! The Windows registry (`HKCU\Software\Valve\Steam`) is read instead of assuming
+//! `C:\Program Files (x86)\Steam`: Steam can be on another drive, and the active
+//! user can only be known by asking it directly (`userdata` contains a folder
+//! for every account that has ever logged in on this machine).
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -13,10 +13,10 @@ use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
 
 use super::vdf::unescape;
 
-/// Identificador de Factorio en Steam.
+/// Factorio's identifier on Steam.
 pub const FACTORIO_APP_ID: &str = "427520";
 
-/// Un SteamID64 menos esto da el id de cuenta que nombra las carpetas de `userdata`.
+/// A SteamID64 minus this gives the account id that names the `userdata` folders.
 const STEAM_ID64_BASE: u64 = 76_561_197_960_265_728;
 
 const STEAM_PROCESS: &str = "steam.exe";
@@ -29,7 +29,7 @@ pub struct Steam {
 }
 
 impl Steam {
-    /// `userdata\<cuenta>\config\localconfig.vdf`, donde viven las opciones de lanzamiento.
+    /// `userdata\<account>\config\localconfig.vdf`, where the launch options live.
     pub fn localconfig(&self) -> PathBuf {
         self.root
             .join("userdata")
@@ -38,7 +38,7 @@ impl Steam {
             .join("localconfig.vdf")
     }
 
-    /// ¿Aparece Factorio instalado en alguna biblioteca de Steam?
+    /// Does Factorio appear installed in any Steam library?
     pub fn factorio_installed(&self) -> bool {
         let manifest = format!("appmanifest_{FACTORIO_APP_ID}.acf");
         let libraries =
@@ -51,15 +51,15 @@ impl Steam {
             .any(|library| library.join("steamapps").join(&manifest).is_file())
     }
 
-    /// Pide a Steam que se cierre y espera a que el proceso desaparezca.
+    /// Asks Steam to close and waits for the process to disappear.
     ///
-    /// `steam.exe -shutdown` es la forma ordenada: Steam guarda su estado (y su
-    /// `localconfig.vdf`) antes de salir. Matar el proceso perdería cambios.
+    /// `steam.exe -shutdown` is the orderly way: Steam saves its state (and its
+    /// `localconfig.vdf`) before exiting. Killing the process would lose changes.
     pub fn shutdown(&self, timeout: Duration) -> Result<()> {
         std::process::Command::new(&self.exe)
             .arg("-shutdown")
             .spawn()
-            .with_context(|| format!("no se pudo ejecutar {}", self.exe.display()))?;
+            .with_context(|| format!("could not run {}", self.exe.display()))?;
 
         let deadline = Instant::now() + timeout;
         while Instant::now() < deadline {
@@ -68,24 +68,24 @@ impl Steam {
             }
             std::thread::sleep(Duration::from_millis(500));
         }
-        bail!("Steam no se cerró en {} s", timeout.as_secs())
+        bail!("Steam did not close within {} s", timeout.as_secs())
     }
 
-    /// Arranca Steam sin esperarlo.
+    /// Starts Steam without waiting for it.
     pub fn start(&self) -> Result<()> {
         std::process::Command::new(&self.exe)
             .spawn()
-            .with_context(|| format!("no se pudo arrancar {}", self.exe.display()))?;
+            .with_context(|| format!("could not start {}", self.exe.display()))?;
         Ok(())
     }
 }
 
-/// Localiza Steam y la cuenta activa.
+/// Locates Steam and the active account.
 pub fn locate() -> Result<Steam> {
     let root = registry::read_string(r"Software\Valve\Steam", "SteamPath")
         .map(|path| PathBuf::from(path.replace('/', "\\")))
         .filter(|path| path.is_dir())
-        .context("no se encontró Steam: falta HKCU\\Software\\Valve\\Steam\\SteamPath")?;
+        .context("Steam not found: HKCU\\Software\\Valve\\Steam\\SteamPath is missing")?;
 
     let exe = registry::read_string(r"Software\Valve\Steam", "SteamExe")
         .map(|path| PathBuf::from(path.replace('/', "\\")))
@@ -96,11 +96,11 @@ pub fn locate() -> Result<Steam> {
     Ok(Steam { root, exe, account })
 }
 
-/// Cuenta con la sesión iniciada. Por orden de fiabilidad:
-/// 1. `ActiveUser` del registro (sólo vale mientras Steam está abierto: en
-///    frío vale 0, que aquí se descarta);
-/// 2. la de `loginusers.vdf` — ver [`parse_active_account`];
-/// 3. la única carpeta de `userdata`, si sólo hay una.
+/// Account with the session logged in. In order of reliability:
+/// 1. registry `ActiveUser` (only valid while Steam is open: when cold it
+///    is 0, which is discarded here);
+/// 2. the one in `loginusers.vdf` — see [`parse_active_account`];
+/// 3. the only `userdata` folder, if there is just one.
 fn active_account(root: &Path) -> Result<u32> {
     if let Some(user) = registry::read_dword(r"Software\Valve\Steam\ActiveProcess", "ActiveUser") {
         if user != 0 {
@@ -122,11 +122,11 @@ fn active_account(root: &Path) -> Result<u32> {
         .filter(|id| *id != 0);
     match (accounts.next(), accounts.next()) {
         (Some(only), None) => Ok(only),
-        _ => bail!("no se pudo saber qué cuenta de Steam está activa"),
+        _ => bail!("could not determine which Steam account is active"),
     }
 }
 
-/// ¿Hay un proceso de Steam en ejecución?
+/// Is there a Steam process running?
 pub fn is_running() -> bool {
     let mut system = System::new();
     system.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
@@ -139,18 +139,18 @@ pub fn is_running() -> bool {
 }
 
 //------------------------------------------------------------------------------
-// Análisis de ficheros VDF (puro, comprobable)
+// VDF file parsing (pure, testable)
 //------------------------------------------------------------------------------
 
-/// Valor entrecomillado de una línea `"clave"   "valor"`, si la clave coincide.
+/// Quoted value of a line `"key"   "value"`, if the key matches.
 fn quoted_pair(line: &str) -> Option<(&str, &str)> {
     let mut parts = line.trim().split('"');
-    // "" | clave | espacio | valor | ""
+    // "" | key | space | value | ""
     let (_, key, _, value) = (parts.next()?, parts.next()?, parts.next()?, parts.next()?);
     Some((key, value))
 }
 
-/// Rutas de las bibliotecas de Steam en `libraryfolders.vdf`.
+/// Paths of the Steam libraries in `libraryfolders.vdf`.
 pub fn parse_library_paths(text: &str) -> Vec<PathBuf> {
     text.lines()
         .filter_map(quoted_pair)
@@ -159,19 +159,19 @@ pub fn parse_library_paths(text: &str) -> Vec<PathBuf> {
         .collect()
 }
 
-/// Id de cuenta más probable de `loginusers.vdf`.
+/// Most likely account id from `loginusers.vdf`.
 ///
-/// Cada usuario es un bloque cuyo nombre es su SteamID64 (17 dígitos). Se
-/// prueban, en orden:
-/// 1. el marcado `MostRecent "1"` — algunas versiones de Steam lo escriben;
-/// 2. si sólo hay una cuenta recordada, ésa, tenga o no las claves de arriba —
-///    es el caso real más común y el que falla si no se cubre aparte: con
-///    Steam cerrado no hay ninguna otra pista;
-/// 3. si hay varias y ninguna está marcada, la de `Timestamp` más alto (el
-///    último inicio de sesión).
+/// Each user is a block whose name is its SteamID64 (17 digits). These are
+/// tried, in order:
+/// 1. the `MostRecent "1"` flag — some versions of Steam write it;
+/// 2. if there is only one remembered account, that one, whether or not it has
+///    the keys above — it's the most common real case, and the one that breaks
+///    if not handled separately: with Steam closed there is no other clue;
+/// 3. if there are several and none is flagged, the one with the highest
+///    `Timestamp` (the most recent login).
 pub fn parse_active_account(text: &str) -> Option<u32> {
     let mut accounts: Vec<(u64, bool, u64)> = Vec::new(); // (SteamID64, MostRecent, Timestamp)
-    let mut current: Option<usize> = None; // índice en `accounts` del bloque en curso
+    let mut current: Option<usize> = None; // index in `accounts` of the block being parsed
 
     for line in text.lines() {
         if let Some((key, value)) = quoted_pair(line) {
@@ -186,7 +186,7 @@ pub fn parse_active_account(text: &str) -> Option<u32> {
             continue;
         }
 
-        // Línea con una sola cadena: puede ser el SteamID64 que abre un bloque.
+        // Line with a single string: may be the SteamID64 that opens a block.
         let name = line.trim().trim_matches('"');
         if name.len() == 17 && name.bytes().all(|b| b.is_ascii_digit()) {
             if let Ok(id) = name.parse() {
@@ -211,7 +211,7 @@ pub fn parse_active_account(text: &str) -> Option<u32> {
 }
 
 //------------------------------------------------------------------------------
-// Registro de Windows
+// Windows registry
 //------------------------------------------------------------------------------
 
 mod registry {
@@ -227,7 +227,7 @@ mod registry {
         let (subkey, name) = (wide(subkey), wide(name));
         let mut size: u32 = 0;
 
-        // Primera llamada: sólo pregunta cuántos bytes hacen falta.
+        // First call: just asks how many bytes are needed.
         let status = unsafe {
             RegGetValueW(
                 HKEY_CURRENT_USER,
@@ -290,7 +290,7 @@ mod tests {
     const LIBRARIES: &str = "\"libraryfolders\"\n{\n\t\"0\"\n\t{\n\t\t\"path\"\t\t\"C:\\\\Program Files (x86)\\\\Steam\"\n\t\t\"label\"\t\t\"\"\n\t\t\"apps\"\n\t\t{\n\t\t\t\"427520\"\t\t\"123\"\n\t\t}\n\t}\n\t\"1\"\n\t{\n\t\t\"path\"\t\t\"D:\\\\SteamLibrary\"\n\t}\n}\n";
 
     #[test]
-    fn lee_todas_las_bibliotecas_y_deshace_el_escapado() {
+    fn reads_all_libraries_and_unescapes() {
         assert_eq!(
             parse_library_paths(LIBRARIES),
             vec![
@@ -301,47 +301,48 @@ mod tests {
     }
 
     #[test]
-    fn sin_bibliotecas_da_lista_vacia() {
+    fn no_libraries_gives_empty_list() {
         assert!(parse_library_paths("").is_empty());
         assert!(parse_library_paths("\"libraryfolders\"\n{\n}\n").is_empty());
     }
 
     const LOGINUSERS: &str = "\"users\"\n{\n\t\"76561198000000001\"\n\t{\n\t\t\"AccountName\"\t\t\"vieja\"\n\t\t\"MostRecent\"\t\t\"0\"\n\t\t\"Timestamp\"\t\t\"1000\"\n\t}\n\t\"76561198236141462\"\n\t{\n\t\t\"AccountName\"\t\t\"actual\"\n\t\t\"MostRecent\"\t\t\"1\"\n\t\t\"Timestamp\"\t\t\"500\"\n\t}\n}\n";
 
-    // El formato real capturado en este equipo: una sola cuenta recordada, sin
-    // MostRecent (esta versión de Steam no lo escribe), sólo Timestamp. Es el
-    // caso que rompía la detección con Steam cerrado antes de este arreglo.
+    // The real format captured on this machine: a single remembered account,
+    // without MostRecent (this version of Steam doesn't write it), only
+    // Timestamp. This is the case that broke detection with Steam closed
+    // before this fix.
     const LOGINUSERS_REAL: &str = "\"users\"\n{\n\t\"76561198236141462\"\n\t{\n\t\t\"AccountName\"\t\t\"puertollano7\"\n\t\t\"PersonaName\"\t\t\"enrik0\"\n\t\t\"RememberPassword\"\t\t\"1\"\n\t\t\"WantsOfflineMode\"\t\t\"0\"\n\t\t\"SkipOfflineModeWarning\"\t\t\"0\"\n\t\t\"AutoLogin\"\t\t\"1\"\n\t\t\"Timestamp\"\t\t\"1790450811\"\n\t}\n}\n";
 
     #[test]
-    fn la_cuenta_activa_es_la_marcada_most_recent_aunque_no_sea_la_ultima() {
-        // 76561198236141462 - 76561197960265728 = 275875734. Tiene MostRecent
-        // pero un Timestamp menor que la otra cuenta: gana igualmente.
+    fn active_account_is_the_one_marked_most_recent_even_if_not_the_latest() {
+        // 76561198236141462 - 76561197960265728 = 275875734. It has MostRecent
+        // but a lower Timestamp than the other account: it still wins.
         assert_eq!(parse_active_account(LOGINUSERS), Some(275_875_734));
     }
 
     #[test]
-    fn sin_most_recent_gana_el_timestamp_mas_alto() {
+    fn without_most_recent_the_highest_timestamp_wins() {
         let sin = LOGINUSERS.replace("\"MostRecent\"\t\t\"1\"\n\t\t", "");
-        // Ahora ninguna tiene MostRecent; la de Timestamp 1000 (la "vieja") gana.
+        // Now neither has MostRecent; the one with Timestamp 1000 (the "old" one) wins.
         // 76561198000000001 - 76561197960265728 = 39734273
         assert_eq!(parse_active_account(&sin), Some(39_734_273));
     }
 
     #[test]
-    fn una_sola_cuenta_recordada_se_usa_aunque_no_tenga_ninguna_marca() {
-        // Caso real: Steam cerrado, loginusers.vdf sin MostRecent, una cuenta.
+    fn a_single_remembered_account_is_used_even_without_any_flag() {
+        // Real case: Steam closed, loginusers.vdf without MostRecent, one account.
         assert_eq!(parse_active_account(LOGINUSERS_REAL), Some(275_875_734));
     }
 
     #[test]
-    fn sin_cuentas_no_hay_nada_que_elegir() {
+    fn no_accounts_means_nothing_to_choose() {
         assert_eq!(parse_active_account(""), None);
         assert_eq!(parse_active_account("\"users\"\n{\n}\n"), None);
     }
 
     #[test]
-    fn la_ruta_de_localconfig_sale_de_la_cuenta() {
+    fn localconfig_path_comes_from_the_account() {
         let steam = Steam {
             root: PathBuf::from(r"C:\Steam"),
             exe: PathBuf::from(r"C:\Steam\steam.exe"),
