@@ -170,6 +170,16 @@ local function combat_stats_of(force, cache)
   return stats
 end
 
+-- Same per-write caching as `combat_stats_of`.
+local function spm_of(force, cache)
+  local cached = cache[force.index]
+  if not cached then
+    cached = collect.science_per_minute(force)
+    cache[force.index] = cached
+  end
+  return cached
+end
+
 local function write_state()
   local players = game.connected_players
   if #players == 0 then
@@ -182,6 +192,7 @@ local function write_state()
   -- Not per force (see collect.total_pollution): computed just once.
   local pollution = collect.total_pollution()
   local combat_cache = {}
+  local spm_cache = {}
 
   for _, player in pairs(players) do
     local settings = player.mod_settings
@@ -211,6 +222,7 @@ local function write_state()
         session_start = session_start[player.index],
         combat = combat_stats_of(force, combat_cache),
         pollution = pollution,
+        spm = spm_of(force, spm_cache),
       })
 
       -- `for_player` makes each client write only its own file: without
@@ -329,5 +341,10 @@ commands.add_command("drp-debug", { "drp.debug-help" }, function(event)
     deaths,
     collect.total_pollution(),
     player.afk_time
+  ))
+  -- Cross-check against the Production panel (P), 1m window, science packs' consumption.
+  player.print(string.format(
+    "[Discord RP] SPM %.1f",
+    collect.science_per_minute(player.force)
   ))
 end)

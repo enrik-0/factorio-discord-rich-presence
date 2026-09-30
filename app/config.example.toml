@@ -37,7 +37,7 @@ share_save_name = true
 #
 # Variables: {save} {planet} {surface} {research} {research_pct} {tech_done}
 #            {tech_total} {evolution} {rockets} {mod_count} {players_online}
-#            {mode} {overhaul} {version} {player} {server}
+#            {mode} {overhaul} {version} {player} {server} {spm}
 #
 # Los bloques separados por " · " se eliminan enteros si les falta algún dato.
 # ---------------------------------------------------------------------------

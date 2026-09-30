@@ -84,6 +84,9 @@ fn build_vars(state: &GameState, privacy: &Privacy) -> HashMap<&'static str, Str
         }
         vars.insert("tech_done", research.done.to_string());
         vars.insert("tech_total", research.total.to_string());
+        if let Some(spm) = research.spm.filter(|spm| *spm >= 0.05) {
+            vars.insert("spm", format!("{spm:.1}"));
+        }
     }
 
     if let Some(evolution) = state.evolution {
@@ -193,6 +196,7 @@ mod tests {
                 progress: Some(0.88),
                 done: 41,
                 total: 1510,
+                spm: None,
             }),
             ..Default::default()
         }

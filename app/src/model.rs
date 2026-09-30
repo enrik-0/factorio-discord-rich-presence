@@ -103,6 +103,9 @@ pub struct Research {
     pub progress: Option<f64>,
     pub done: u32,
     pub total: u32,
+    /// Science packs consumed in the last minute, as the Production panel shows it.
+    #[serde(default)]
+    pub spm: Option<f64>,
 }
 
 impl Research {
@@ -332,6 +335,21 @@ mod tests {
     }
 
     #[test]
+    fn spm_is_optional_so_older_mods_still_parse() {
+        let old: ModState = serde_json::from_str(SAMPLE).unwrap();
+        assert_eq!(old.research.unwrap().spm, None);
+
+        let json = r#"{
+            "schema": 2, "seq": 1,
+            "player": { "name": "a", "index": 1, "controller": "character" },
+            "game": { "multiplayer": false, "players_online": 1, "ticks_played": 60 },
+            "research": { "done": 1, "total": 2, "spm": 90.5 }
+        }"#;
+        let state: ModState = serde_json::from_str(json).unwrap();
+        assert_eq!(state.research.unwrap().spm, Some(90.5));
+    }
+
+    #[test]
     fn research_label_falls_back_to_raw_name() {
         let research = Research {
             current: Some("electromagnetic-plant".into()),
@@ -339,6 +357,7 @@ mod tests {
             progress: Some(0.5),
             done: 1,
             total: 2,
+            spm: None,
         };
         assert_eq!(research.label(), Some("electromagnetic-plant"));
         assert_eq!(research.percent(), Some(50));
@@ -352,6 +371,7 @@ mod tests {
             progress: Some(1.4),
             done: 0,
             total: 0,
+            spm: None,
         };
         assert_eq!(research.percent(), Some(100));
     }
