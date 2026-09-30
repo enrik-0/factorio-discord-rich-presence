@@ -93,6 +93,7 @@ casilla puede activarse sin que aparezca nada.
 | Planeta | línea 1 | sí |
 | Modpack principal | línea 1 | no |
 | Investigación en curso | línea 2 | sí |
+| Ciencia por minuto (SPM) | línea 2 | siempre, oculto mientras sea cero |
 | Contador de tecnologías | al pasar el ratón | sí |
 | Factor de evolución | al pasar el ratón | no |
 | Cohetes lanzados | al pasar el ratón | sí, oculto mientras sean 0 |

@@ -136,6 +136,67 @@ function collect.total_pollution()
   return total
 end
 
+--------------------------------------------------------------------------------
+-- Science per minute: read from the same production statistics the game's
+-- Production panel (P) shows, so the number matches what the player sees.
+--------------------------------------------------------------------------------
+
+-- Every item any lab accepts, from vanilla or from mods. Prototypes can't
+-- change without a reload, which resets this local, so it never goes stale.
+local science_packs
+
+local function get_science_packs()
+  if science_packs then
+    return science_packs
+  end
+  local packs, seen = {}, {}
+  for _, lab in pairs(prototypes.get_entity_filtered({ { filter = "type", type = "lab" } })) do
+    for _, name in pairs(lab.lab_inputs or {}) do
+      if not seen[name] then
+        seen[name] = true
+        packs[#packs + 1] = name
+      end
+    end
+  end
+  science_packs = packs
+  return packs
+end
+
+--- Science packs the force consumed during the last minute.
+---
+--- Each research unit takes one of every ingredient at once, so every pack in
+--- use drains at the same pace: the highest per-pack rate is the SPM, and
+--- summing them would multiply it by the number of pack types.
+--- Walks every surface (Space Age has labs on several planets).
+--- @return number
+function collect.science_per_minute(force)
+  local per_pack = {}
+  for _, surface in pairs(game.surfaces) do
+    local ok, stats = pcall(force.get_item_production_statistics, surface)
+    if ok and stats then
+      for _, name in ipairs(get_science_packs()) do
+        -- "output" is consumption; `count = true` gives the total over the
+        -- window, which for the one-minute window is the per-minute rate.
+        local consumed = stats.get_flow_count({
+          name = name,
+          category = "output",
+          precision_index = defines.flow_precision_index.one_minute,
+          count = true,
+        })
+        per_pack[name] = (per_pack[name] or 0) + consumed
+      end
+    end
+  end
+
+  local spm = 0
+  for _, consumed in pairs(per_pack) do
+    if consumed > spm then
+      spm = consumed
+    end
+  end
+  return spm
+end
+
 --- Builds the table that gets serialized to JSON for a player.
 function collect.build_payload(player, opts)
   local force = player.force
@@ -147,6 +208,7 @@ function collect.build_payload(player, opts)
   local research = {
     done = counts.done,
     total = counts.total,
+    spm = opts.spm,
   }
   if current then
     research.current = current.name

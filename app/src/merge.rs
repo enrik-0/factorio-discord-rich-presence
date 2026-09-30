@@ -94,6 +94,7 @@ mod tests {
                 progress: Some(0.64),
                 done: 142,
                 total: 247,
+                spm: None,
             }),
             evolution: Some(0.42),
             trees_razed: Some(1_337),
