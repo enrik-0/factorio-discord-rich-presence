@@ -342,7 +342,8 @@ commands.add_command("drp-debug", { "drp.debug-help" }, function(event)
     collect.total_pollution(),
     player.afk_time
   ))
-  -- Cross-check against the Production panel (P), 1m window, science packs' consumption.
+  -- Cross-check against the Production panel (P), 1m window, science packs' consumption
+  -- (normal-quality packs match it exactly; higher qualities are weighted by their units).
   player.print(string.format(
     "[Discord RP] SPM %.1f",
     collect.science_per_minute(player.force)

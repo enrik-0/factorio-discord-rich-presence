@@ -1,6 +1,6 @@
 {
   "name": "discord-rich-presence",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "title": "Discord Rich Presence",
   "author": "enrik0",
   "description": "Publishes the state of your game (planet, save, research and playtime) to your Discord profile. Requires the companion app Factorio Discord RP, which is downloaded separately.",
