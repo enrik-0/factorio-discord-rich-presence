@@ -55,6 +55,16 @@ pub fn build(state: &GameState, privacy: &Privacy) -> ActivitySpec {
             }
         }
     }
+    // Always on, but hidden while nothing is being consumed. Pushed last so
+    // it's the first thing dropped if the line overflows.
+    if let Some(spm) = state
+        .research
+        .as_ref()
+        .and_then(|r| r.spm)
+        .filter(|spm| *spm >= 0.05)
+    {
+        line2.push(format!("{spm:.1} SPM"));
+    }
 
     // --- tooltip: counters ---
     let mut tooltip = Vec::new();
@@ -279,6 +289,7 @@ mod tests {
                 progress: Some(0.88),
                 done: 41,
                 total: 1510,
+                spm: None,
             }),
             ..Default::default()
         }
@@ -517,11 +528,42 @@ mod tests {
             progress: None,
             done: 41,
             total: 1510,
+            spm: None,
         });
         assert_eq!(
             build(&state, &Privacy::default()).state.as_deref(),
             Some("41/1510 technologies")
         );
+    }
+
+    #[test]
+    fn spm_follows_the_research_on_line_2() {
+        let mut state = with_display(Display::default());
+        state.research.as_mut().unwrap().spm = Some(123.45);
+        assert_eq!(
+            build(&state, &Privacy::default()).state.as_deref(),
+            Some("Researching Extracción de petróleo (88%) · 123.5 SPM")
+        );
+
+        // Shown even with the research field turned off: it has no setting.
+        state.display = Some(Display {
+            research: false,
+            ..Display::default()
+        });
+        assert_eq!(
+            build(&state, &Privacy::default()).state.as_deref(),
+            Some("123.5 SPM")
+        );
+    }
+
+    #[test]
+    fn spm_is_hidden_while_zero() {
+        let mut state = with_display(Display::default());
+        state.research.as_mut().unwrap().spm = Some(0.0);
+        assert!(!build(&state, &Privacy::default())
+            .state
+            .unwrap()
+            .contains("SPM"));
     }
 
     #[test]

@@ -92,6 +92,7 @@ turned on without anything showing up.
 | Planet | line 1 | yes |
 | Main modpack | line 1 | no |
 | Current research | line 2 | yes |
+| Science per minute (SPM) | line 2 | always, hidden while zero |
 | Technology counter | on hover | yes |
 | Evolution factor | on hover | no |
 | Rockets launched | on hover | yes, hidden while zero |
