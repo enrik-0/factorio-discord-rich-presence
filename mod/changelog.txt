@@ -5,6 +5,8 @@ Date: 2026-09-30
     - Science per minute (SPM) on line 2, next to the research. Read from the same statistics the
       Production panel shows (science packs consumed over the last minute), so it matches the
       game and works with labs and science packs from mods. Hidden while zero.
+      Higher-quality packs count for the research units they hold (an uncommon pack is worth 2,
+      a rare one 3, ...), so the number is research units per minute, not packs.
     - /drp-debug prints the SPM too.
 ---------------------------------------------------------------------------------------------------
 Version: 0.5.2

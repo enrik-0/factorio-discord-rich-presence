@@ -162,7 +162,24 @@ local function get_science_packs()
   return packs
 end
 
---- Science packs the force consumed during the last minute.
+-- Qualities with how many research units one pack of that quality is worth.
+-- A higher-quality pack lasts several units (uncommon 2, rare 3, ...), so
+-- counting packs alone would undercount a base that uses them.
+local qualities
+
+local function get_qualities()
+  if qualities then
+    return qualities
+  end
+  qualities = {}
+  for name, quality in pairs(prototypes.quality) do
+    qualities[#qualities + 1] = { name = name, units = quality.science_capacity_multiplier }
+  end
+  return qualities
+end
+
+--- Research units per minute: normal-quality packs the force consumed during
+--- the last minute, counting each higher-quality pack as the units it holds.
 ---
 --- Each research unit takes one of every ingredient at once, so every pack in
 --- use drains at the same pace: the highest per-pack rate is the SPM, and
@@ -175,15 +192,18 @@ function collect.science_per_minute(force)
     local ok, stats = pcall(force.get_item_production_statistics, surface)
     if ok and stats then
       for _, name in ipairs(get_science_packs()) do
-        -- "output" is consumption; `count = true` gives the total over the
-        -- window, which for the one-minute window is the per-minute rate.
-        local consumed = stats.get_flow_count({
-          name = name,
-          category = "output",
-          precision_index = defines.flow_precision_index.one_minute,
-          count = true,
-        })
-        per_pack[name] = (per_pack[name] or 0) + consumed
+        for _, quality in ipairs(get_qualities()) do
+          -- "output" is consumption; `count = true` gives the total over the
+          -- window, which for the one-minute window is the per-minute rate.
+          -- A bare name only reads normal quality, so ask for each quality.
+          local consumed = stats.get_flow_count({
+            name = { name = name, quality = quality.name },
+            category = "output",
+            precision_index = defines.flow_precision_index.one_minute,
+            count = true,
+          })
+          per_pack[name] = (per_pack[name] or 0) + consumed * quality.units
+        end
       end
     end
   end
